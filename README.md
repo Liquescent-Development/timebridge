@@ -96,28 +96,117 @@ for await (const correlation of engine.correlate(query)) {
 
 The package supports a PromQL-inspired syntax for correlating log streams:
 
-### Basic Join
+### Basic Join Operations
+
+#### Inner Join (AND)
+Finds events that exist in both streams:
 
 ```promql
 loki({service="frontend"})[5m]
   and on(request_id)
   loki({service="backend"})[5m]
+```
+
+#### Left Join (OR)
+Includes all events from the left stream, with matching events from the right:
+
+```promql
+graylog(service:payment)[10m]
+  or on(transaction_id)
+  graylog(service:notification)[10m]
+```
+
+#### Anti-Join (UNLESS)
+Events from the left stream that have no match in the right:
+
+```promql
+loki({service="api"})[5m]
+  unless on(request_id)
+  loki({service="database"})[5m]
+```
+
+### Graylog-Specific Examples
+
+#### Basic Graylog Query
+```promql
+graylog(application:webserver AND level:ERROR)[5m]
+```
+
+#### Graylog with Stream Name (v0.0.7+)
+```javascript
+// Configure adapter with stream name
+const adapter = new GraylogAdapter({
+  url: "http://graylog:9000",
+  apiToken: "token",
+  streamName: "Production Logs" // New in v0.0.7
+});
+
+// Query will automatically filter to this stream
+const query = 'graylog(service:api)[5m]';
+```
+
+#### Complex Graylog Correlation
+```promql
+# Correlate errors with their originating requests
+graylog(level:ERROR AND service:backend)[30m]
+  and on(correlation_id)
+  graylog(service:frontend AND path:"/api/*")[30m]
+```
+
+#### Multi-Service Trace Correlation
+```promql
+# Three-way correlation across microservices
+graylog(service:api-gateway)[10m]
+  and on(trace_id)
+  graylog(service:auth-service)[10m]
+  and on(trace_id)
+  graylog(service:user-service)[10m]
 ```
 
 ### Cross-Source Correlation
 
+#### Loki and Graylog Together
 ```promql
-loki({job="nginx"})[5m]
+# Correlate Kubernetes logs (Loki) with application logs (Graylog)
+loki({namespace="production", pod=~"api-.*"})[5m]
   and on(request_id)
-  graylog(service:api)[5m]
+  graylog(application:api AND environment:production)[5m]
 ```
 
-### Temporal Join
+#### With Custom Field Mapping
+```promql
+# Map different field names between sources
+loki({job="nginx"})[5m]
+  and on(req_id=request_id)
+  graylog(service:backend)[5m]
+```
+
+### Advanced Features
+
+#### Temporal Join with Time Window
+Events must occur within a specific time window:
 
 ```promql
 loki({service="frontend"})[5m]
-  and on(request_id) within(30s)
+  and on(session_id) within(30s)
   loki({service="backend"})[5m]
+```
+
+#### Group Modifiers
+Control how multiple matches are handled:
+
+```promql
+# Many-to-one correlation
+graylog(service:loadbalancer)[5m]
+  and on(backend_id) group_left()
+  graylog(service:backend)[5m]
+```
+
+#### Ignoring Specific Labels
+```promql
+loki({service="api"})[5m]
+  and ignoring(timestamp, hostname)
+  loki({service="database"})[5m]
 ```
 
 ## SOCKS Proxy Configuration

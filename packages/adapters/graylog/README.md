@@ -5,8 +5,14 @@ This adapter enables the Log Correlator to connect to and consume logs from Gray
 ## Installation
 
 ```bash
-npm install @liquescent/log-correlator-graylog
+npm install @liquescent/log-correlator-graylog@^0.0.7
 ```
+
+## What's New in v0.0.7
+
+- **Stream Name Support**: Filter logs by human-readable stream names instead of IDs
+- **Enhanced Security**: Complete elimination of ReDoS vulnerabilities
+- **Improved Query Sanitization**: Robust handling of malformed queries without regex
 
 ## Supported Graylog Versions
 
@@ -30,13 +36,13 @@ const legacyAdapter = new GraylogAdapter({
   timeout: 15000, // 15 second timeout
 });
 
-// For Graylog 6.x+ with stream filtering by name
+// For Graylog 6.x+ with stream filtering by name (New in v0.0.7!)
 const v6Adapter = new GraylogAdapter({
   url: "http://graylog.example.com:9000",
   apiToken: "your-api-token", // API token recommended for v6
   apiVersion: "v6", // Required for Graylog 6.x
   pollInterval: 2000,
-  streamName: "Application Logs", // Filter by human-readable stream name
+  streamName: "Application Logs", // NEW: Filter by human-readable stream name
 });
 
 // Or use stream ID directly if you know it (24-char MongoDB ObjectId)
@@ -144,14 +150,15 @@ const { GraylogAdapter } = require("@liquescent/log-correlator-graylog");
 
 const engine = new CorrelationEngine();
 
-// Add Graylog adapter
+// Add Graylog adapter with stream name filtering (v0.0.7+)
 engine.addAdapter(
   "graylog",
   new GraylogAdapter({
     url: "http://graylog.example.com:9000",
     apiToken: "your-token",
     apiVersion: "v6", // Use v6 API for Graylog 6.x+ (returns CSV)
-    streamId: "optional-stream-id", // Filter by specific stream if needed
+    streamName: "Production Logs", // NEW in v0.0.7: Use human-readable name!
+    // streamId: "507f1f77bcf86cd799439011", // Alternative: use stream ID directly
   }),
 );
 
@@ -179,10 +186,30 @@ for await (const event of engine.correlate(correlationQuery)) {
 - **Polling-based streaming**: Continuously polls for new log messages
 - **Automatic retry**: Handles transient failures with exponential backoff
 - **Join key extraction**: Automatically extracts correlation IDs from log messages
-- **Stream filtering**: Filter logs by stream name or ID
+- **Stream filtering**: Filter logs by stream name or ID (v0.0.7+ supports names!)
 - **Time window support**: Configure time ranges for log queries
-- **Stream name resolution**: Automatically converts stream names to IDs
+- **Stream name resolution**: Automatically converts stream names to IDs (v0.0.7+)
 - **Correlation support**: Works seamlessly with the CorrelationEngine for complex correlation queries
+
+## Stream Name Support (v0.0.7+)
+
+The adapter now supports filtering by human-readable stream names instead of MongoDB ObjectIDs:
+
+```javascript
+// Before v0.0.7 - required stream ID
+const adapter = new GraylogAdapter({
+  streamId: "507f1f77bcf86cd799439011", // Hard to remember!
+});
+
+// v0.0.7+ - use stream names
+const adapter = new GraylogAdapter({
+  streamName: "Production Logs", // Much better!
+});
+
+// The adapter automatically resolves the name to ID
+// If multiple streams have the same name, the first match is used
+// Stream resolution happens once at adapter initialization
+```
 
 ## Correlation Query Support
 
