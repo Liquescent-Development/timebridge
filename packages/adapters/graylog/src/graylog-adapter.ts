@@ -138,16 +138,15 @@ export class GraylogAdapter implements DataSourceAdapter {
         this.resolvedStreamId = stream.id;
         // Only log if we're not being destroyed (prevents "Cannot log after tests are done")
         if (this.activeStreams) {
-          // Don't log the actual stream ID for security reasons (CodeQL js/clear-text-logging)
-          console.log(`Resolved stream name "${this.options.streamName}"`);
+          // Log success without revealing the stream name
+          console.log(`Successfully resolved stream`);
         }
       } else {
         // Only warn if we're not being destroyed
         if (this.activeStreams) {
+          // Don't log actual stream names for security reasons
           console.warn(
-            `Stream "${this.options.streamName}" not found. Available streams: ${streams
-              .map((s: any) => s.title || s.name)
-              .join(", ")}`,
+            `Stream not found. ${streams.length} streams available`,
           );
         }
       }
@@ -697,7 +696,8 @@ export class GraylogAdapter implements DataSourceAdapter {
     // Handle empty field queries (e.g., "field:" without value)
     // These cause parse errors in v6
     // But don't match field:* which is valid
-    query = query.replace(/(\w+):\s*(?=\s|$|AND|OR)/g, "$1:*");
+    // Use a non-vulnerable regex pattern to avoid ReDoS
+    query = query.replace(/(\w+):\s(?=\s|$|AND|OR)/g, "$1:*");
 
     // Handle quoted empty values - remove them entirely
     query = query.replace(/(\w+):""\s*/g, "");

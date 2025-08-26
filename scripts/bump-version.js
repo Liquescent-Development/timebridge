@@ -84,12 +84,16 @@ function updateReadmeVersions(oldVersion, newVersion) {
   ];
 
   for (const readmePath of readmeFiles) {
-    if (!fs.existsSync(readmePath)) {
+    let content;
+    let originalContent;
+    
+    try {
+      content = fs.readFileSync(readmePath, "utf8");
+      originalContent = content;
+    } catch (error) {
+      // File doesn't exist or can't be read, skip it
       continue;
     }
-
-    let content = fs.readFileSync(readmePath, "utf8");
-    const originalContent = content;
 
     // Update version in npm install commands
     // Match patterns like: @liquescent/log-correlator-core@^0.0.1

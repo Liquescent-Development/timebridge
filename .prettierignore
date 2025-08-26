@@ -15,3 +15,6 @@ test-parser*.js
 
 # Examples (vanilla JS)
 packages/examples/**/*.js
+
+# Development environment
+.devcontainer/
