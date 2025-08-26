@@ -99,6 +99,7 @@ The package supports a PromQL-inspired syntax for correlating log streams:
 ### Basic Join Operations
 
 #### Inner Join (AND)
+
 Finds events that exist in both streams:
 
 ```promql
@@ -108,6 +109,7 @@ loki({service="frontend"})[5m]
 ```
 
 #### Left Join (OR)
+
 Includes all events from the left stream, with matching events from the right:
 
 ```promql
@@ -117,6 +119,7 @@ graylog(service:payment)[10m]
 ```
 
 #### Anti-Join (UNLESS)
+
 Events from the left stream that have no match in the right:
 
 ```promql
@@ -128,24 +131,27 @@ loki({service="api"})[5m]
 ### Graylog-Specific Examples
 
 #### Basic Graylog Query
+
 ```promql
 graylog(application:webserver AND level:ERROR)[5m]
 ```
 
 #### Graylog with Stream Name (v0.0.7+)
+
 ```javascript
 // Configure adapter with stream name
 const adapter = new GraylogAdapter({
   url: "http://graylog:9000",
   apiToken: "token",
-  streamName: "Production Logs" // New in v0.0.7
+  streamName: "Production Logs", // New in v0.0.7
 });
 
 // Query will automatically filter to this stream
-const query = 'graylog(service:api)[5m]';
+const query = "graylog(service:api)[5m]";
 ```
 
 #### Complex Graylog Correlation
+
 ```promql
 # Correlate errors with their originating requests
 graylog(level:ERROR AND service:backend)[30m]
@@ -154,6 +160,7 @@ graylog(level:ERROR AND service:backend)[30m]
 ```
 
 #### Multi-Service Trace Correlation
+
 ```promql
 # Three-way correlation across microservices
 graylog(service:api-gateway)[10m]
@@ -166,6 +173,7 @@ graylog(service:api-gateway)[10m]
 ### Cross-Source Correlation
 
 #### Loki and Graylog Together
+
 ```promql
 # Correlate Kubernetes logs (Loki) with application logs (Graylog)
 loki({namespace="production", pod=~"api-.*"})[5m]
@@ -174,6 +182,7 @@ loki({namespace="production", pod=~"api-.*"})[5m]
 ```
 
 #### With Custom Field Mapping
+
 ```promql
 # Map different field names between sources
 loki({job="nginx"})[5m]
@@ -184,6 +193,7 @@ loki({job="nginx"})[5m]
 ### Advanced Features
 
 #### Temporal Join with Time Window
+
 Events must occur within a specific time window:
 
 ```promql
@@ -193,6 +203,7 @@ loki({service="frontend"})[5m]
 ```
 
 #### Group Modifiers
+
 Control how multiple matches are handled:
 
 ```promql
@@ -203,6 +214,7 @@ graylog(service:loadbalancer)[5m]
 ```
 
 #### Ignoring Specific Labels
+
 ```promql
 loki({service="api"})[5m]
   and ignoring(timestamp, hostname)
