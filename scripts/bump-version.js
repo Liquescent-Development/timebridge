@@ -86,7 +86,7 @@ function updateReadmeVersions(oldVersion, newVersion) {
   for (const readmePath of readmeFiles) {
     let content;
     let originalContent;
-    
+
     try {
       content = fs.readFileSync(readmePath, "utf8");
       originalContent = content;

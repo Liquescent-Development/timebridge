@@ -145,9 +145,7 @@ export class GraylogAdapter implements DataSourceAdapter {
         // Only warn if we're not being destroyed
         if (this.activeStreams) {
           // Don't log actual stream names for security reasons
-          console.warn(
-            `Stream not found. ${streams.length} streams available`,
-          );
+          console.warn(`Stream not found. ${streams.length} streams available`);
         }
       }
     } catch (error) {
