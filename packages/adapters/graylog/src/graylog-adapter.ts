@@ -695,38 +695,43 @@ export class GraylogAdapter implements DataSourceAdapter {
     // These cause parse errors in v6
     // Use string manipulation instead of regex to avoid ReDoS
     // Process patterns like "field: AND", "field: OR", or "field:" at end
-    
+
+    // Helper functions for character classification
+    const isWordChar = (char: string): boolean => {
+      return (
+        (char >= "a" && char <= "z") ||
+        (char >= "A" && char <= "Z") ||
+        (char >= "0" && char <= "9") ||
+        char === "_"
+      );
+    };
+
+    const isWhitespace = (char: string): boolean => {
+      return char === " " || char === "\t" || char === "\n" || char === "\r";
+    };
+
     // Helper function to process the query without regex
     const processEmptyFields = (str: string): string => {
       let result = "";
       let i = 0;
-      
-      const isWordChar = (char: string): boolean => {
-        return (char >= 'a' && char <= 'z') || 
-               (char >= 'A' && char <= 'Z') || 
-               (char >= '0' && char <= '9') || 
-               char === '_';
-      };
-      
-      const isWhitespace = (char: string): boolean => {
-        return char === ' ' || char === '\t' || char === '\n' || char === '\r';
-      };
-      
+
       while (i < str.length) {
         // Look for word characters followed by colon
         if (i > 0 && str[i] === ":" && isWordChar(str[i - 1])) {
           // Found a potential field, check what follows
           let j = i + 1;
-          
+
           // Skip whitespace after colon
           while (j < str.length && isWhitespace(str[j])) {
             j++;
           }
-          
+
           // Check if we hit AND, OR, or end of string
-          if (j >= str.length || 
-              str.substring(j, j + 3) === "AND" || 
-              str.substring(j, j + 2) === "OR") {
+          if (
+            j >= str.length ||
+            str.substring(j, j + 3) === "AND" ||
+            str.substring(j, j + 2) === "OR"
+          ) {
             // Insert * after the colon
             result += ":*";
             i++;
@@ -739,23 +744,90 @@ export class GraylogAdapter implements DataSourceAdapter {
           i++;
         }
       }
-      
+
       return result;
     };
-    
+
     query = processEmptyFields(query);
 
     // Handle quoted empty values - remove them entirely
-    // Use simpler regex to avoid ReDoS vulnerability
-    query = query.replace(/(\w+):""/g, "");
-    query = query.replace(/(\w+):''/g, "");
+    // Use string manipulation to avoid ReDoS vulnerability
+    const removeEmptyQuotes = (str: string): string => {
+      let result = "";
+      let i = 0;
+
+      while (i < str.length) {
+        // Check for pattern like word:"" or word:''
+        if (
+          i > 0 &&
+          str[i] === ":" &&
+          i + 2 < str.length &&
+          ((str[i + 1] === '"' && str[i + 2] === '"') ||
+            (str[i + 1] === "'" && str[i + 2] === "'"))
+        ) {
+          // Check if preceded by word characters
+          let j = i - 1;
+          while (j >= 0 && isWordChar(str[j])) {
+            j--;
+          }
+          if (j < i - 1) {
+            // We found word:"" or word:'', skip the :""/:''
+            i += 3;
+            continue;
+          }
+        }
+        result += str[i];
+        i++;
+      }
+      return result;
+    };
+
+    query = removeEmptyQuotes(query);
 
     // Handle invalid patterns like ":value" (colon without field name)
-    query = query.replace(/^\s*:\w+/g, "");
-    query = query.replace(/\s+:\w+/g, "");
+    // Remove colons at start or after whitespace that are followed by word chars
+    const removeInvalidColons = (str: string): string => {
+      let result = "";
+      let i = 0;
 
-    // Clean up multiple spaces and trim
-    query = query.replace(/\s+/g, " ").trim();
+      while (i < str.length) {
+        if (str[i] === ":" && (i === 0 || isWhitespace(str[i - 1]))) {
+          // Skip this colon and any following word characters
+          i++;
+          while (i < str.length && isWordChar(str[i])) {
+            i++;
+          }
+        } else {
+          result += str[i];
+          i++;
+        }
+      }
+      return result;
+    };
+
+    query = removeInvalidColons(query);
+
+    // Clean up multiple spaces and trim without regex
+    const cleanupSpaces = (str: string): string => {
+      let result = "";
+      let lastWasSpace = false;
+
+      for (let i = 0; i < str.length; i++) {
+        if (isWhitespace(str[i])) {
+          if (!lastWasSpace) {
+            result += " ";
+            lastWasSpace = true;
+          }
+        } else {
+          result += str[i];
+          lastWasSpace = false;
+        }
+      }
+
+      return result.trim();
+    };
+
+    query = cleanupSpaces(query);
 
     // If query becomes empty after sanitization, return empty string
     if (!query || query === "AND" || query === "OR") {
