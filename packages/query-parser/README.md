@@ -14,7 +14,7 @@ PromQL-inspired query parser for log correlation with full support for native Gr
 ## Installation
 
 ```bash
-npm install @liquescent/log-correlator-query-parser
+npm install @liquescent/log-correlator-query-parser@^0.0.7
 ```
 
 ## Usage
