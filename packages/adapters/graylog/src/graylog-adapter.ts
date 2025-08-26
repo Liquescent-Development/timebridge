@@ -693,17 +693,57 @@ export class GraylogAdapter implements DataSourceAdapter {
 
     // Handle empty field queries (e.g., "field:" without value)
     // These cause parse errors in v6
-    // Process the query in a way that avoids ReDoS
-    // Check for patterns like "field: AND", "field: OR", or "field:" at end
-    query = query.replace(/(\w+):(\s+AND)/g, "$1:*$2");
-    query = query.replace(/(\w+):(\s+OR)/g, "$1:*$2");
-    // Handle field at end of string - process without regex backtracking
-    const trimmed = query.trimEnd();
-    if (trimmed !== query && trimmed.endsWith(":")) {
-      query = trimmed + "*";
-    } else if (query.endsWith(":")) {
-      query = query + "*";
-    }
+    // Use string manipulation instead of regex to avoid ReDoS
+    // Process patterns like "field: AND", "field: OR", or "field:" at end
+    
+    // Helper function to process the query without regex
+    const processEmptyFields = (str: string): string => {
+      let result = "";
+      let i = 0;
+      
+      const isWordChar = (char: string): boolean => {
+        return (char >= 'a' && char <= 'z') || 
+               (char >= 'A' && char <= 'Z') || 
+               (char >= '0' && char <= '9') || 
+               char === '_';
+      };
+      
+      const isWhitespace = (char: string): boolean => {
+        return char === ' ' || char === '\t' || char === '\n' || char === '\r';
+      };
+      
+      while (i < str.length) {
+        // Look for word characters followed by colon
+        if (i > 0 && str[i] === ":" && isWordChar(str[i - 1])) {
+          // Found a potential field, check what follows
+          let j = i + 1;
+          
+          // Skip whitespace after colon
+          while (j < str.length && isWhitespace(str[j])) {
+            j++;
+          }
+          
+          // Check if we hit AND, OR, or end of string
+          if (j >= str.length || 
+              str.substring(j, j + 3) === "AND" || 
+              str.substring(j, j + 2) === "OR") {
+            // Insert * after the colon
+            result += ":*";
+            i++;
+          } else {
+            result += str[i];
+            i++;
+          }
+        } else {
+          result += str[i];
+          i++;
+        }
+      }
+      
+      return result;
+    };
+    
+    query = processEmptyFields(query);
 
     // Handle quoted empty values - remove them entirely
     // Use simpler regex to avoid ReDoS vulnerability
