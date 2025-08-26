@@ -698,8 +698,9 @@ export class GraylogAdapter implements DataSourceAdapter {
     query = query.replace(/(\w+):\s(?=\s|$|AND|OR)/g, "$1:*");
 
     // Handle quoted empty values - remove them entirely
-    query = query.replace(/(\w+):""\s*/g, "");
-    query = query.replace(/(\w+):''\s*/g, "");
+    // Use simpler regex to avoid ReDoS vulnerability
+    query = query.replace(/(\w+):""/g, "");
+    query = query.replace(/(\w+):''/g, "");
 
     // Handle invalid patterns like ":value" (colon without field name)
     query = query.replace(/^\s*:\w+/g, "");

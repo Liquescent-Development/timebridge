@@ -1,0 +1,14 @@
+name: "CodeQL config"
+
+paths-ignore:
+  # Ignore generated parser files
+  - "packages/query-parser/src/generated/"
+  - "packages/query-parser/lib/parser.js"
+  
+# You can also add query filters if needed
+query-filters:
+  - exclude:
+      id: js/unused-local-variable
+      # Exclude unused variables in generated code
+      paths:
+        - "packages/query-parser/src/generated/**"
