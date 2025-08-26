@@ -1,6 +1,6 @@
 {
   "name": "@liquescent/log-correlator-examples",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "private": true,
   "description": "Usage examples for log-correlator",
   "scripts": {
