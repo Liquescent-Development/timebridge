@@ -1,6 +1,6 @@
 {
   "name": "@liquescent/log-correlator-core",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "Core correlation engine for real-time log stream processing",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

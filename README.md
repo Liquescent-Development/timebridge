@@ -14,12 +14,12 @@ A TypeScript npm package that enables real-time correlation of log streams from 
 
 ## Installation
 
-> ⚠️ **Pre-release Software**: This is version 0.0.6 - API may change significantly before 1.0.0
+> ⚠️ **Pre-release Software**: This is version 0.0.7 - API may change significantly before 1.0.0
 
 ```bash
-npm install @liquescent/log-correlator-core@^0.0.6
-npm install @liquescent/log-correlator-loki@^0.0.6     # Optional: Loki adapter
-npm install @liquescent/log-correlator-graylog@^0.0.6  # Optional: Graylog adapter
+npm install @liquescent/log-correlator-core@^0.0.7
+npm install @liquescent/log-correlator-loki@^0.0.7     # Optional: Loki adapter
+npm install @liquescent/log-correlator-graylog@^0.0.7  # Optional: Graylog adapter
 ```
 
 ## Quick Start

@@ -1,6 +1,6 @@
 {
   "name": "@liquescent/log-correlator-graylog",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "Graylog adapter for log-correlator",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
