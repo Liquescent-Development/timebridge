@@ -9,6 +9,7 @@
     "build": "npm run build --workspace packages/query-parser && npm run build --workspaces",
     "build:parallel": "npm run build --workspaces",
     "test": "npm run test --workspaces --if-present",
+    "test:integration": "npm run test:integration --workspaces --if-present",
     "lint": "eslint . --ext .ts,.js",
     "typecheck": "tsc --noEmit",
     "clean": "npm run clean --workspaces --if-present",

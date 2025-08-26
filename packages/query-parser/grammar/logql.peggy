@@ -56,12 +56,88 @@ LabelSelector
     }
 
 GraylogSelector
-  = matchers:GraylogMatcherList {
+  = expr:GraylogExpr {
       return {
-        text: matchers.map(m => m.text).join(','),
-        parsed: { type: 'graylog', matchers }
+        text: expr.text,
+        parsed: { type: 'graylog', expr: expr.parsed }
       };
     }
+
+GraylogExpr
+  = left:GraylogAndExpr _ "OR" _ right:GraylogExpr {
+      return {
+        text: `${left.text} OR ${right.text}`,
+        parsed: { op: 'OR', left: left.parsed, right: right.parsed }
+      };
+    }
+  / GraylogAndExpr
+
+GraylogAndExpr
+  = left:GraylogNotExpr _ "AND" _ right:GraylogAndExpr {
+      return {
+        text: `${left.text} AND ${right.text}`,
+        parsed: { op: 'AND', left: left.parsed, right: right.parsed }
+      };
+    }
+  / GraylogNotExpr
+
+GraylogNotExpr
+  = "NOT" _ expr:GraylogNotExpr {
+      return {
+        text: `NOT ${expr.text}`,
+        parsed: { op: 'NOT', expr: expr.parsed }
+      };
+    }
+  / GraylogPrimaryExpr
+
+GraylogPrimaryExpr
+  = "(" _ expr:GraylogExpr _ ")" {
+      return {
+        text: `(${expr.text})`,
+        parsed: expr.parsed
+      };
+    }
+  / GraylogTerm
+
+GraylogTerm
+  = "_exists_:" field:FieldName {
+      return {
+        text: `_exists_:${field}`,
+        parsed: { op: 'exists', field }
+      };
+    }
+  / "_missing_:" field:FieldName {
+      return {
+        text: `_missing_:${field}`,
+        parsed: { op: 'missing', field }
+      };
+    }
+  / field:FieldName ":" "[" from:RangeValue _ "TO" _ to:RangeValue "]" {
+      return {
+        text: `${field}:[${from} TO ${to}]`,
+        parsed: { op: 'range', field, from, to }
+      };
+    }
+  / field:FieldName ":" op:ComparisonOp value:GraylogValue {
+      return {
+        text: `${field}:${op}${value}`,
+        parsed: { op: 'comparison', field, operator: op, value }
+      };
+    }
+  / field:FieldName ":" value:GraylogValue {
+      return {
+        text: `${field}:${value}`,
+        parsed: { field, value }
+      };
+    }
+
+RangeValue
+  = Number { return text(); }
+  / "*" { return text(); }
+  / FieldName
+
+ComparisonOp
+  = ">=" / "<=" / ">" / "<"
 
 PromQLSelector
   = metric:Identifier _ "{" _ matchers:LabelMatcherList? _ "}" {
@@ -90,18 +166,7 @@ LabelMatcher
       };
     }
 
-GraylogMatcherList
-  = first:GraylogMatcher rest:(_ "," _ GraylogMatcher)* {
-      return [first, ...rest.map(r => r[3])];
-    }
-
-GraylogMatcher
-  = field:Identifier _ ":" _ value:GraylogValue {
-      return {
-        text: `${field}:${value}`,
-        parsed: { field, value }
-      };
-    }
+// Removed old GraylogMatcherList and GraylogMatcher as they're replaced
 
 MatchOperator
   = "=~" / "!~" / "!=" / "="
@@ -112,7 +177,16 @@ Value
 
 GraylogValue
   = String { return text(); }
-  / Identifier
+  / WildcardValue
+  / UnquotedValue
+
+WildcardValue
+  = chars:[a-zA-Z0-9_\-\./\\]* "*" rest:[a-zA-Z0-9_\-\./\\*]* { 
+      return chars.join('') + '*' + rest.join(''); 
+    }
+  / "*" rest:[a-zA-Z0-9_\-\./\\]+ { 
+      return '*' + rest.join(''); 
+    }
 
 JoinOperator
   = type:JoinType __ "on" _ "(" _ keys:JoinKeyList _ ")" modifiers:JoinModifier* {
@@ -154,10 +228,10 @@ JoinKeyList
     }
 
 JoinKey
-  = left:Identifier _ "=" _ right:Identifier {
+  = left:FieldName _ "=" _ right:FieldName {
       return { mapping: { left, right } };
     }
-  / key:Identifier {
+  / key:FieldName {
       return { key };
     }
 
@@ -216,11 +290,19 @@ SingleStringChar
   = [^'\\]
   / "\\" char:. { return char; }
 
+// Field names can contain hyphens and dots (for Graylog compatibility)
+FieldName
+  = [a-zA-Z_][a-zA-Z0-9_\-\.]* { return text(); }
+
+// Original identifier for backwards compatibility
 Identifier
   = [a-zA-Z_][a-zA-Z0-9_:]* { return text(); }
 
+UnquotedValue
+  = [a-zA-Z0-9_\-\./:]+ { return text(); }
+
 Number
-  = [0-9]+ { return text(); }
+  = [0-9]+ ("." [0-9]+)? { return text(); }
 
 // Whitespace
 _ = [ \t\r\n]*

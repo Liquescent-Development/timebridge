@@ -72,6 +72,57 @@ function updatePackageVersion(pkgPath, newVersion) {
   console.log(`✅ ${pkg.name}: ${oldVersion} → ${newVersion}`);
 }
 
+function updateReadmeVersions(oldVersion, newVersion) {
+  const readmeFiles = [
+    "README.md",
+    "packages/adapters/loki/README.md",
+    "packages/adapters/graylog/README.md",
+    "packages/adapters/promql/README.md",
+    "packages/core/README.md",
+    "packages/query-parser/README.md",
+    "packages/examples/README.md",
+  ];
+
+  for (const readmePath of readmeFiles) {
+    let content;
+    let originalContent;
+
+    try {
+      content = fs.readFileSync(readmePath, "utf8");
+      originalContent = content;
+    } catch (error) {
+      // File doesn't exist or can't be read, skip it
+      continue;
+    }
+
+    // Update version in npm install commands
+    // Match patterns like: @liquescent/log-correlator-core@^0.0.1
+    content = content.replace(
+      /(@liquescent\/log-correlator-[a-z-]+@\^?)\d+\.\d+\.\d+/g,
+      `$1${newVersion}`,
+    );
+
+    // Update version in the pre-release warning
+    // Match pattern like: This is version 0.0.1
+    content = content.replace(
+      /This is version \d+\.\d+\.\d+/g,
+      `This is version ${newVersion}`,
+    );
+
+    // Update any standalone version references in code blocks
+    // Match patterns like: "version": "0.0.1"
+    content = content.replace(
+      /"version":\s*"\d+\.\d+\.\d+"/g,
+      `"version": "${newVersion}"`,
+    );
+
+    if (content !== originalContent) {
+      fs.writeFileSync(readmePath, content);
+      console.log(`📝 Updated versions in ${readmePath}`);
+    }
+  }
+}
+
 function main() {
   const arg = process.argv[2];
 
@@ -91,6 +142,10 @@ function main() {
   for (const pkgPath of PACKAGES) {
     updatePackageVersion(pkgPath, newVersion);
   }
+
+  // Update versions in README files
+  console.log("\n📚 Updating README versions...");
+  updateReadmeVersions(currentVersion, newVersion);
 
   // Update lock file
   console.log("\n🔄 Updating package-lock.json...");

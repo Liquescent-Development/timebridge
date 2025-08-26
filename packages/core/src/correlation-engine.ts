@@ -333,6 +333,11 @@ export class CorrelationEngine extends EventEmitter {
         });
       }
     }, this.options.gcInterval as number);
+
+    // Ensure the interval doesn't keep the process alive during tests
+    if (this.gcInterval && typeof this.gcInterval.unref === "function") {
+      this.gcInterval.unref();
+    }
   }
 
   async destroy(): Promise<void> {

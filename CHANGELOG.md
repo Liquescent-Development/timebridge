@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ✨ Features
 
+- **Graylog Integration Testing Suite**: Add comprehensive integration tests for Graylog adapter with environment-based configuration, SOCKS proxy support, and CI/CD compatibility
 - Enhance WebSocket implementation and fix PromQL adapter types ([a3bbda7](https://github.com/Liquescent-Development/log-correlator/commit/a3bbda7))
 - Add comprehensive practical examples for error detection and IDE integration ([4212ef2](https://github.com/Liquescent-Development/log-correlator/commit/4212ef2))
 - Add PromQL adapter, post-correlation filters, and LRU cache management ([9ba1e94](https://github.com/Liquescent-Development/log-correlator/commit/9ba1e94))

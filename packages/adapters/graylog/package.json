@@ -7,7 +7,9 @@
   "scripts": {
     "build": "tsc",
     "clean": "rm -rf dist",
-    "test": "jest --passWithNoTests"
+    "test": "jest --passWithNoTests",
+    "test:integration": "jest --testMatch='**/test/integration/**/*.test.ts' --testTimeout=60000",
+    "test:integration:detectOpenHandles": "jest --testMatch='**/test/integration/**/*.test.ts' --testTimeout=60000 --detectOpenHandles"
   },
   "keywords": [
     "graylog",

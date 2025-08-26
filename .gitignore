@@ -11,5 +11,6 @@ coverage/
 .idea/
 
 # Project-specific configuration files
+allowed-domains.txt
 CLAUDE.md
 .claude/

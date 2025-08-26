@@ -14,12 +14,12 @@ A TypeScript npm package that enables real-time correlation of log streams from 
 
 ## Installation
 
-> ⚠️ **Pre-release Software**: This is version 0.0.1 - API may change significantly before 1.0.0
+> ⚠️ **Pre-release Software**: This is version 0.0.6 - API may change significantly before 1.0.0
 
 ```bash
-npm install @liquescent/log-correlator-core@^0.0.1
-npm install @liquescent/log-correlator-loki@^0.0.1     # Optional: Loki adapter
-npm install @liquescent/log-correlator-graylog@^0.0.1  # Optional: Graylog adapter
+npm install @liquescent/log-correlator-core@^0.0.6
+npm install @liquescent/log-correlator-loki@^0.0.6     # Optional: Loki adapter
+npm install @liquescent/log-correlator-graylog@^0.0.6  # Optional: Graylog adapter
 ```
 
 ## Quick Start
@@ -173,6 +173,32 @@ npm run typecheck
 # Linting
 npm run lint
 ```
+
+### Integration Testing
+
+The adapters include comprehensive integration tests that validate functionality against live instances:
+
+```bash
+# Run integration tests for all adapters
+npm run test:integration
+
+# Run integration tests for specific adapter
+cd packages/adapters/graylog && npm run test:integration
+cd packages/adapters/loki && npm run test:integration
+```
+
+**Graylog Integration Tests** verify:
+
+- Connection and authentication (basic auth and API tokens)
+- Query execution across legacy (2.x-5.x) and v6+ APIs
+- Field extraction and correlation ID detection
+- Time range filtering and stream filtering
+- Error handling and performance testing
+- SOCKS proxy connectivity
+
+**Setup**: Copy `.env.example` to `.env` and configure your instance details. Tests automatically skip if no connection is configured.
+
+See individual adapter READMEs for detailed integration test configuration.
 
 ## Documentation
 

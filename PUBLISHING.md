@@ -8,14 +8,14 @@ Packages are automatically published to npm when a version tag is pushed to GitH
 
 ```bash
 # 1. Bump version (patch, minor, or major)
-node scripts/bump-version.js patch  # 0.0.1 -> 0.0.2
+node scripts/bump-version.js patch  # 0.0.6 -> 0.0.7
 
 # 2. Commit changes
 git add -A
-git commit -m "chore: bump version to 0.0.2"
+git commit -m "chore: bump version to 0.0.7"
 
 # 3. Create and push tag
-git tag v0.0.2
+git tag v0.0.7
 git push && git push --tags
 
 # 4. GitHub Actions will automatically publish to npm!
@@ -39,7 +39,7 @@ This project uses semantic versioning:
 - `0.x.x` - Pre-release, breaking changes expected
 - `1.0.0` - First stable release with public API commitment
 
-Current version: `0.0.1` (initial development)
+Current version: `0.0.6` (initial development)
 
 ## Publishing Options
 
@@ -113,8 +113,8 @@ Configure your private registry in `.npmrc`:
 1. **Update versions** using the release tool:
 
    ```bash
-   node tools/release.js patch  # for 0.0.1 -> 0.0.2
-   node tools/release.js minor  # for 0.0.1 -> 0.1.0
+   node tools/release.js patch  # for 0.0.6 -> 0.0.7
+   node tools/release.js minor  # for 0.0.6 -> 0.1.0
    node tools/release.js major  # for 0.x.x -> 1.0.0
    ```
 
@@ -135,7 +135,7 @@ Configure your private registry in `.npmrc`:
 The repository includes a GitHub Action for automated releases:
 
 - Trigger manually via GitHub Actions UI
-- Or push a tag: `git tag v0.0.1 && git push --tags`
+- Or push a tag: `git tag v0.0.7 && git push --tags`
 
 ## Testing Installation
 
@@ -147,9 +147,9 @@ mkdir test-install && cd test-install
 npm init -y
 
 # Test installation
-npm install @liquescent/log-correlator-core@0.0.1
-npm install @liquescent/log-correlator-loki@0.0.1
-npm install @liquescent/log-correlator-graylog@0.0.1
+npm install @liquescent/log-correlator-core@0.0.6
+npm install @liquescent/log-correlator-loki@0.0.6
+npm install @liquescent/log-correlator-graylog@0.0.6
 
 # Test usage
 node -e "const { CorrelationEngine } = require('@liquescent/log-correlator-core'); console.log('Success!')"

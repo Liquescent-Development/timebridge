@@ -15,11 +15,11 @@
 ### Option 1: Quick Release (Recommended)
 
 ```bash
-# For patch release (0.0.1 -> 0.0.2)
+# For patch release (0.0.6 -> 0.0.7)
 npm run release:patch
 git push && git push --tags
 
-# For minor release (0.0.2 -> 0.1.0)
+# For minor release (0.0.6 -> 0.1.0)
 npm run release:minor
 git push && git push --tags
 
@@ -39,10 +39,10 @@ git diff
 
 # 3. Commit
 git add -A
-git commit -m "chore: bump version to 0.0.2"
+git commit -m "chore: bump version to 0.0.7"
 
 # 4. Tag
-git tag v0.0.2
+git tag v0.0.7
 
 # 5. Push
 git push && git push --tags
@@ -85,7 +85,7 @@ If GitHub Actions is down, you can publish manually:
 
 ```bash
 # Ensure you're on the tagged commit
-git checkout v0.0.2
+git checkout v0.0.7
 
 # Login to npm
 npm login

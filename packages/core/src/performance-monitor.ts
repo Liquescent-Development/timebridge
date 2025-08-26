@@ -53,6 +53,14 @@ export class PerformanceMonitor extends EventEmitter {
       this.updateMetrics();
       this.emit("metrics", this.getMetrics());
     }, this.intervalMs);
+
+    // Ensure the interval doesn't keep the process alive during tests
+    if (
+      this.monitoringInterval &&
+      typeof this.monitoringInterval.unref === "function"
+    ) {
+      this.monitoringInterval.unref();
+    }
   }
 
   stop(): void {

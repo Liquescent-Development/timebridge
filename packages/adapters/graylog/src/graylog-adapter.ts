@@ -14,7 +14,8 @@ export interface GraylogAdapterOptions {
   pollInterval?: number;
   timeout?: number;
   maxRetries?: number;
-  streamId?: string;
+  streamId?: string; // MongoDB ObjectId of the stream (24 hex chars)
+  streamName?: string; // Human-readable stream name (will be resolved to ID)
   apiVersion?: "legacy" | "v6"; // 'legacy' for universal search, 'v6' for views API
   proxy?: {
     host: string;
@@ -61,6 +62,8 @@ export class GraylogAdapter implements DataSourceAdapter {
   private activeStreams: Set<AbortController> = new Set();
   private authHeader: string;
   private proxyAgent?: SocksProxyAgent;
+  private resolvedStreamId?: string;
+  private streamResolutionPromise?: Promise<void>;
 
   constructor(private options: GraylogAdapterOptions) {
     this.options = {
@@ -93,6 +96,78 @@ export class GraylogAdapter implements DataSourceAdapter {
       const proxyUrl = `socks${type}://${auth}${host}:${port}`;
       this.proxyAgent = new SocksProxyAgent(proxyUrl);
     }
+
+    // Resolve stream name to ID if needed
+    if (this.options.streamName && !this.options.streamId) {
+      this.streamResolutionPromise = this.resolveStreamName();
+    }
+  }
+
+  /**
+   * Resolve stream name to stream ID
+   */
+  private async resolveStreamName(): Promise<void> {
+    try {
+      const url = `${this.options.url}/api/streams`;
+      const response = await fetch(url, {
+        headers: {
+          Authorization: this.authHeader,
+          Accept: "application/json",
+        },
+        agent: this.proxyAgent as any,
+      });
+
+      if (!response.ok) {
+        console.warn(
+          `Failed to fetch streams for name resolution: ${response.statusText}`,
+        );
+        return;
+      }
+
+      const data = await response.json();
+      const streams = data.streams || [];
+
+      // Find stream by name (case-insensitive)
+      const stream = streams.find(
+        (s: any) =>
+          s.title?.toLowerCase() === this.options.streamName?.toLowerCase() ||
+          s.name?.toLowerCase() === this.options.streamName?.toLowerCase(),
+      );
+
+      if (stream) {
+        this.resolvedStreamId = stream.id;
+        // Only log if we're not being destroyed (prevents "Cannot log after tests are done")
+        if (this.activeStreams) {
+          // Log success without revealing the stream name
+          console.log(`Successfully resolved stream`);
+        }
+      } else {
+        // Only warn if we're not being destroyed
+        if (this.activeStreams) {
+          // Don't log actual stream names for security reasons
+          console.warn(`Stream not found. ${streams.length} streams available`);
+        }
+      }
+    } catch (error) {
+      // Only warn if we're not being destroyed
+      if (this.activeStreams) {
+        console.warn(`Failed to resolve stream name: ${error}`);
+      }
+    }
+  }
+
+  /**
+   * Get the effective stream ID (resolved from name or direct ID)
+   */
+  private async getEffectiveStreamId(): Promise<string | undefined> {
+    // Wait for stream name resolution if in progress
+    if (this.streamResolutionPromise) {
+      await this.streamResolutionPromise;
+      this.streamResolutionPromise = undefined; // Clear after resolution
+    }
+
+    // Return resolved ID or original streamId
+    return this.resolvedStreamId || this.options.streamId;
   }
 
   getName(): string {
@@ -103,8 +178,63 @@ export class GraylogAdapter implements DataSourceAdapter {
     query: string,
     options?: unknown,
   ): AsyncIterable<LogEvent> {
-    const timeRange = (options as { timeRange?: string })?.timeRange || "5m";
-    yield* this.createPollingStream(query, timeRange);
+    const opts =
+      (options as { timeRange?: string; continuous?: boolean }) || {};
+    const timeRange = opts.timeRange || "5m";
+    const continuous = opts.continuous === true; // Default to false for correlation queries
+
+    if (continuous) {
+      // For real-time monitoring, poll continuously
+      yield* this.createPollingStream(query, timeRange);
+    } else {
+      // For correlation queries with time windows, fetch historical data once
+      // This aligns with LogQL/PromQL semantics where [5m] means "last 5 minutes of data"
+      yield* this.createHistoricalStream(query, timeRange);
+    }
+  }
+
+  private async *createHistoricalStream(
+    query: string,
+    timeRange: string,
+  ): AsyncIterable<LogEvent> {
+    const controller = new AbortController();
+    this.activeStreams.add(controller);
+
+    try {
+      const timeWindowMs = this.parseTimeRange(timeRange);
+      const now = new Date();
+      const from = new Date(now.getTime() - timeWindowMs);
+
+      // Get effective stream ID once at the start
+      const effectiveStreamId = await this.getEffectiveStreamId();
+
+      const searchParams: Record<string, unknown> = {
+        query:
+          this.options.apiVersion === "v6"
+            ? query
+            : this.convertToGraylogQuery(query),
+        from: from.toISOString(),
+        to: now.toISOString(),
+        limit: 1000,
+        sort: "timestamp:asc",
+        fields: "_id,message,timestamp,source,*",
+        range: Math.floor(timeWindowMs / 1000), // Add range in seconds for v6
+      };
+
+      if (effectiveStreamId) {
+        searchParams["filter"] = `streams:${effectiveStreamId}`;
+      }
+
+      const response = await this.search(searchParams, controller.signal);
+
+      if (response.messages && response.messages.length > 0) {
+        for (const msg of response.messages) {
+          yield this.parseGraylogMessage(msg.message);
+        }
+      }
+    } finally {
+      this.activeStreams.delete(controller);
+    }
   }
 
   private async *createPollingStream(
@@ -118,21 +248,28 @@ export class GraylogAdapter implements DataSourceAdapter {
       let lastMessageId: string | null = null;
       const timeWindowMs = this.parseTimeRange(timeRange);
 
+      // Get effective stream ID once at the start
+      const effectiveStreamId = await this.getEffectiveStreamId();
+
       while (!controller.signal.aborted) {
         const now = new Date();
         const from = new Date(now.getTime() - timeWindowMs);
 
         const searchParams: Record<string, unknown> = {
-          query: this.convertToGraylogQuery(query),
+          query:
+            this.options.apiVersion === "v6"
+              ? query
+              : this.convertToGraylogQuery(query),
           from: from.toISOString(),
           to: now.toISOString(),
           limit: 1000,
           sort: "timestamp:asc",
           fields: "_id,message,timestamp,source,*",
+          range: Math.floor(timeWindowMs / 1000), // Add range in seconds for v6
         };
 
-        if (this.options.streamId) {
-          searchParams["filter"] = `streams:${this.options.streamId}`;
+        if (effectiveStreamId) {
+          searchParams["filter"] = `streams:${effectiveStreamId}`;
         }
 
         try {
@@ -160,16 +297,44 @@ export class GraylogAdapter implements DataSourceAdapter {
           if (controller.signal.aborted) break;
           console.error("Graylog polling error:", error);
 
-          // Retry with exponential backoff
-          await new Promise((resolve) =>
-            setTimeout(resolve, this.options.pollInterval! * 2),
-          );
+          // Retry with exponential backoff - check for abort signal
+          await new Promise((resolve) => {
+            if (controller.signal.aborted) return resolve(undefined);
+
+            const timeoutId = setTimeout(
+              resolve,
+              this.options.pollInterval! * 2,
+            );
+
+            controller.signal.addEventListener(
+              "abort",
+              () => {
+                clearTimeout(timeoutId);
+                resolve(undefined);
+              },
+              { once: true },
+            );
+          });
         }
 
-        // Wait before next poll
-        await new Promise((resolve) =>
-          setTimeout(resolve, this.options.pollInterval),
-        );
+        // Break if aborted before the wait period
+        if (controller.signal.aborted) break;
+
+        // Wait before next poll - check for abort signal
+        await new Promise((resolve) => {
+          if (controller.signal.aborted) return resolve(undefined);
+
+          const timeoutId = setTimeout(resolve, this.options.pollInterval);
+
+          controller.signal.addEventListener(
+            "abort",
+            () => {
+              clearTimeout(timeoutId);
+              resolve(undefined);
+            },
+            { once: true },
+          );
+        });
       }
     } finally {
       this.activeStreams.delete(controller);
@@ -227,23 +392,76 @@ export class GraylogAdapter implements DataSourceAdapter {
     // Calculate time window in seconds for relative timerange
     const range = (params.range as number) || 300; // Default 5 minutes
 
+    // Convert query for Graylog v6 - handle special cases
+    let query = (params.query as string) || "";
+
+    // Graylog v6 doesn't allow '*' as first character in WildcardQuery
+    // Use empty string for "all messages" queries
+    if (query === "*" || query === "") {
+      query = "";
+    } else {
+      // Ensure the query is properly formatted for Graylog v6
+      query = this.sanitizeQueryForV6(query);
+    }
+
     // Graylog v6 views API expects this exact structure with nested query_string
     const requestBody: any = {
       query_string: {
-        query_string: (params.query as string) || "*",
+        query_string: query,
       },
       timerange: {
         type: "relative",
         from: range, // seconds ago
       },
-      fields_in_order: ["timestamp", "source", "message", "_id"],
+      // Request more fields to capture all available data
+      // Using "*" would be ideal but some Graylog versions don't support it
+      // So we request common fields explicitly
+      fields_in_order: [
+        "timestamp",
+        "source",
+        "message",
+        "_id",
+        "level",
+        "severity",
+        "tier",
+        "application",
+        "http_status_class",
+        "status",
+        "http_status",
+        "trace_id",
+        "request_id",
+        "correlation_id",
+        "session_id",
+        "span_id",
+        "host",
+        "service",
+        "component",
+        "module",
+        "user",
+        "client_ip",
+        "method",
+        "path",
+        "url",
+        "response_time",
+        "duration",
+        "size",
+      ],
       limit: (params.limit as number) || 1000,
       chunk_size: 1000,
     };
 
     // Add streams filter if configured
-    if (this.options.streamId) {
-      requestBody.streams = [this.options.streamId];
+    const effectiveStreamId = await this.getEffectiveStreamId();
+    if (effectiveStreamId) {
+      // Validate that streamId looks like a MongoDB ObjectId (24 hex characters)
+      if (/^[a-f0-9]{24}$/i.test(effectiveStreamId)) {
+        requestBody.streams = [effectiveStreamId];
+      } else {
+        // Don't log the actual stream ID for security reasons (CodeQL js/clear-text-logging)
+        console.warn(
+          `Warning: Invalid streamId format - must be 24 hex characters. Ignoring stream filter.`,
+        );
+      }
     }
 
     const fetchOptions: RequestInit = {
@@ -287,38 +505,6 @@ export class GraylogAdapter implements DataSourceAdapter {
     // Parse CSV response (v6 API returns CSV by default)
     const csvText = await response.text();
     return this.parseCSVResponse(csvText);
-  }
-
-  private parseJSONResponse(data: any): GraylogSearchResponse {
-    // Handle the JSON response format from /api/views/search/messages
-    const messages: Array<{ message: GraylogMessage; index: string }> = [];
-
-    // The response structure varies, but typically includes a messages array or results
-    const messageList = data.messages || data.results || data.datarows || [];
-
-    for (const item of messageList) {
-      // Extract message data - structure depends on Graylog version
-      const msg = item.message || item;
-
-      messages.push({
-        message: {
-          _id: msg._id || msg.id || `msg_${messages.length}`,
-          timestamp: msg.timestamp || new Date().toISOString(),
-          message: msg.message || "",
-          source: msg.source || "",
-          fields: msg.fields || {},
-        },
-        index: msg.index || "graylog",
-      });
-    }
-
-    return {
-      messages,
-      total_results: data.total_results || data.total || messages.length,
-      from:
-        data.from || data.effective_timerange?.from || new Date().toISOString(),
-      to: data.to || data.effective_timerange?.to || new Date().toISOString(),
-    };
   }
 
   private parseCSVResponse(csv: string): GraylogSearchResponse {
@@ -486,6 +672,169 @@ export class GraylogAdapter implements DataSourceAdapter {
     }
 
     return keys;
+  }
+
+  private sanitizeQueryForV6(query: string): string {
+    // Graylog v6 has stricter query parsing rules
+    // Handle common patterns that cause issues
+
+    // Remove leading/trailing whitespace
+    query = query.trim();
+
+    // If query is just a wildcard, return empty (search all)
+    if (query === "*") {
+      return "";
+    }
+
+    // If query starts with standalone wildcard, remove it (not allowed in v6)
+    if (query.startsWith("* ")) {
+      query = query.substring(2).trim();
+    }
+
+    // Handle empty field queries (e.g., "field:" without value)
+    // These cause parse errors in v6
+    // Use string manipulation instead of regex to avoid ReDoS
+    // Process patterns like "field: AND", "field: OR", or "field:" at end
+
+    // Helper functions for character classification
+    const isWordChar = (char: string): boolean => {
+      return (
+        (char >= "a" && char <= "z") ||
+        (char >= "A" && char <= "Z") ||
+        (char >= "0" && char <= "9") ||
+        char === "_"
+      );
+    };
+
+    const isWhitespace = (char: string): boolean => {
+      return char === " " || char === "\t" || char === "\n" || char === "\r";
+    };
+
+    // Helper function to process the query without regex
+    const processEmptyFields = (str: string): string => {
+      let result = "";
+      let i = 0;
+
+      while (i < str.length) {
+        // Look for word characters followed by colon
+        if (i > 0 && str[i] === ":" && isWordChar(str[i - 1])) {
+          // Found a potential field, check what follows
+          let j = i + 1;
+
+          // Skip whitespace after colon
+          while (j < str.length && isWhitespace(str[j])) {
+            j++;
+          }
+
+          // Check if we hit AND, OR, or end of string
+          if (
+            j >= str.length ||
+            str.substring(j, j + 3) === "AND" ||
+            str.substring(j, j + 2) === "OR"
+          ) {
+            // Insert * after the colon
+            result += ":*";
+            i++;
+          } else {
+            result += str[i];
+            i++;
+          }
+        } else {
+          result += str[i];
+          i++;
+        }
+      }
+
+      return result;
+    };
+
+    query = processEmptyFields(query);
+
+    // Handle quoted empty values - remove them entirely
+    // Use string manipulation to avoid ReDoS vulnerability
+    const removeEmptyQuotes = (str: string): string => {
+      let result = "";
+      let i = 0;
+
+      while (i < str.length) {
+        // Check for pattern like word:"" or word:''
+        if (
+          i > 0 &&
+          str[i] === ":" &&
+          i + 2 < str.length &&
+          ((str[i + 1] === '"' && str[i + 2] === '"') ||
+            (str[i + 1] === "'" && str[i + 2] === "'"))
+        ) {
+          // Check if preceded by word characters
+          let j = i - 1;
+          while (j >= 0 && isWordChar(str[j])) {
+            j--;
+          }
+          if (j < i - 1) {
+            // We found word:"" or word:'', skip the :""/:''
+            i += 3;
+            continue;
+          }
+        }
+        result += str[i];
+        i++;
+      }
+      return result;
+    };
+
+    query = removeEmptyQuotes(query);
+
+    // Handle invalid patterns like ":value" (colon without field name)
+    // Remove colons at start or after whitespace that are followed by word chars
+    const removeInvalidColons = (str: string): string => {
+      let result = "";
+      let i = 0;
+
+      while (i < str.length) {
+        if (str[i] === ":" && (i === 0 || isWhitespace(str[i - 1]))) {
+          // Skip this colon and any following word characters
+          i++;
+          while (i < str.length && isWordChar(str[i])) {
+            i++;
+          }
+        } else {
+          result += str[i];
+          i++;
+        }
+      }
+      return result;
+    };
+
+    query = removeInvalidColons(query);
+
+    // Clean up multiple spaces and trim without regex
+    const cleanupSpaces = (str: string): string => {
+      let result = "";
+      let lastWasSpace = false;
+
+      for (let i = 0; i < str.length; i++) {
+        if (isWhitespace(str[i])) {
+          if (!lastWasSpace) {
+            result += " ";
+            lastWasSpace = true;
+          }
+        } else {
+          result += str[i];
+          lastWasSpace = false;
+        }
+      }
+
+      return result.trim();
+    };
+
+    query = cleanupSpaces(query);
+
+    // If query becomes empty after sanitization, return empty string
+    if (!query || query === "AND" || query === "OR") {
+      return "";
+    }
+
+    return query;
   }
 
   private convertToGraylogQuery(query: string): string {
@@ -666,5 +1015,16 @@ export class GraylogAdapter implements DataSourceAdapter {
       controller.abort();
     }
     this.activeStreams.clear();
+
+    // Wait for stream resolution to complete if in progress
+    // This prevents the "Cannot log after tests are done" error
+    if (this.streamResolutionPromise) {
+      try {
+        await this.streamResolutionPromise;
+      } catch (error) {
+        // Ignore errors during cleanup
+      }
+      this.streamResolutionPromise = undefined;
+    }
   }
 }
