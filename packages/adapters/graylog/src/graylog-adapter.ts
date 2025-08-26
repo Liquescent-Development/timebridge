@@ -693,9 +693,17 @@ export class GraylogAdapter implements DataSourceAdapter {
 
     // Handle empty field queries (e.g., "field:" without value)
     // These cause parse errors in v6
-    // But don't match field:* which is valid
-    // Use a non-vulnerable regex pattern to avoid ReDoS
-    query = query.replace(/(\w+):\s(?=\s|$|AND|OR)/g, "$1:*");
+    // Process the query in a way that avoids ReDoS
+    // Check for patterns like "field: AND", "field: OR", or "field:" at end
+    query = query.replace(/(\w+):(\s+AND)/g, "$1:*$2");
+    query = query.replace(/(\w+):(\s+OR)/g, "$1:*$2");
+    // Handle field at end of string - process without regex backtracking
+    const trimmed = query.trimEnd();
+    if (trimmed !== query && trimmed.endsWith(":")) {
+      query = trimmed + "*";
+    } else if (query.endsWith(":")) {
+      query = query + "*";
+    }
 
     // Handle quoted empty values - remove them entirely
     // Use simpler regex to avoid ReDoS vulnerability
