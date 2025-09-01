@@ -30,7 +30,7 @@
     "release:major": "npm run version:major && git add -A && git commit -m 'chore: bump version' && git tag v$(node -p 'require(\"./packages/core/package.json\").version')"
   },
   "devDependencies": {
-    "@types/node": "^20.10.0",
+    "@types/node": "^24.3.0",
     "@typescript-eslint/eslint-plugin": "^6.13.0",
     "@typescript-eslint/parser": "^6.13.0",
     "eslint": "^8.54.0",
