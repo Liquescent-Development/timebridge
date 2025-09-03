@@ -12,7 +12,7 @@ export declare class BackpressureController extends EventEmitter {
   constructor(options: BackpressureOptions);
   controlFlow<T>(
     source: AsyncIterable<T>,
-    processor: (item: T) => Promise<void>,
+    processor: (item: T) => Promise<void>
   ): AsyncGenerator<T>;
   private pause;
   private resume;

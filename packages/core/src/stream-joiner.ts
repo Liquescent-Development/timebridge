@@ -1,5 +1,5 @@
 import { LogEvent, CorrelatedEvent } from "./types";
-import { JoinType } from "@liquescent/log-correlator-query-parser";
+import { JoinType } from "@timebridge/timeql-parser";
 import { TimeWindow } from "./time-window";
 
 export interface StreamJoinerOptions {
@@ -26,28 +26,91 @@ export class StreamJoiner {
 
   async *join(
     leftStream: AsyncIterable<LogEvent>,
-    rightStream: AsyncIterable<LogEvent>,
+    rightStream: AsyncIterable<LogEvent>
   ): AsyncGenerator<CorrelatedEvent> {
-    // Batch processing for compatibility with existing tests
+    // For large datasets, use streaming correlation with smart eviction
     const leftEvents: Map<string, LogEvent[]> = new Map();
     const rightEvents: Map<string, LogEvent[]> = new Map();
+    
+    // Check if we should use streaming mode (for large time windows)
+    const useStreamingMode = this.options.timeWindow > 3600000; // > 1 hour
+    
+    if (useStreamingMode) {
+      console.log(`[StreamJoiner] Using streaming correlation mode for large time window (${this.options.timeWindow}ms)`);
+      // Use streaming correlation with memory management
+      yield* this.joinStreaming(leftStream, rightStream);
+    } else {
+      // Batch processing for compatibility with existing tests and smaller datasets
+      await Promise.all([
+        this.processStream(leftStream, leftEvents),
+        this.processStream(rightStream, rightEvents),
+      ]);
 
-    // Process streams in parallel
-    await Promise.all([
-      this.processStream(leftStream, leftEvents),
-      this.processStream(rightStream, rightEvents),
-    ]);
+      // Find and emit correlations
+      const correlations = this.findCorrelations(leftEvents, rightEvents);
+      for (const correlation of correlations) {
+        yield correlation;
+      }
+    }
+  }
 
-    // Find and emit correlations
-    const correlations = this.findCorrelations(leftEvents, rightEvents);
-    for (const correlation of correlations) {
+  private async *joinStreaming(
+    leftStream: AsyncIterable<LogEvent>,
+    rightStream: AsyncIterable<LogEvent>
+  ): AsyncGenerator<CorrelatedEvent> {
+    // Streaming correlation for large datasets with memory management
+    const leftStorage = new Map<string, LogEvent[]>();
+    const rightStorage = new Map<string, LogEvent[]>();
+    const emittedKeys = new Set<string>();
+    
+    // Track time boundaries for eviction
+    let globalMinTime: number | null = null;
+    let globalMaxTime: number | null = null;
+    
+    // Process streams with interleaved correlation and eviction
+    const correlationChannel = this.createCorrelationChannel();
+    
+    const leftProcessor = this.processStreamWithCorrelation(
+      leftStream,
+      leftStorage,
+      rightStorage,
+      emittedKeys,
+      correlationChannel.push,
+      "left"
+    );
+    
+    const rightProcessor = this.processStreamWithCorrelation(
+      rightStream,
+      rightStorage,
+      leftStorage,
+      emittedKeys,
+      correlationChannel.push,
+      "right"
+    );
+    
+    // Process both streams concurrently
+    const processingComplete = Promise.all([leftProcessor, rightProcessor]).then(() => {
+      // Emit any remaining correlations
+      const remaining = this.findCorrelations(leftStorage, rightStorage);
+      for (const corr of remaining) {
+        if (!emittedKeys.has(corr.joinValue)) {
+          correlationChannel.push(corr);
+        }
+      }
+      correlationChannel.close();
+    });
+    
+    // Yield correlations as they are found
+    for await (const correlation of correlationChannel.iterable) {
       yield correlation;
     }
+    
+    await processingComplete;
   }
 
   async *joinRealtime(
     leftStream: AsyncIterable<LogEvent>,
-    rightStream: AsyncIterable<LogEvent>,
+    rightStream: AsyncIterable<LogEvent>
   ): AsyncGenerator<CorrelatedEvent> {
     // Real-time processing with immediate emission
     yield* this.joinRealtimeImpl(leftStream, rightStream);
@@ -55,7 +118,7 @@ export class StreamJoiner {
 
   private async *joinRealtimeImpl(
     leftStream: AsyncIterable<LogEvent>,
-    rightStream: AsyncIterable<LogEvent>,
+    rightStream: AsyncIterable<LogEvent>
   ): AsyncGenerator<CorrelatedEvent> {
     const leftEvents: Map<string, LogEvent[]> = new Map();
     const rightEvents: Map<string, LogEvent[]> = new Map();
@@ -75,7 +138,7 @@ export class StreamJoiner {
       emittedJoinKeys,
       correlationChannel.push,
       eventArrivalTimes,
-      "left",
+      "left"
     );
 
     const rightPromise = this.processStreamRealtime(
@@ -85,14 +148,14 @@ export class StreamJoiner {
       emittedJoinKeys,
       correlationChannel.push,
       eventArrivalTimes,
-      "right",
+      "right"
     );
 
     // Create a promise that resolves when both streams are done
     const streamsComplete = Promise.all([leftPromise, rightPromise]).then(
       () => {
         correlationChannel.close();
-      },
+      }
     );
 
     try {
@@ -108,7 +171,7 @@ export class StreamJoiner {
       const finalCorrelations = this.findRemainingCorrelations(
         leftEvents,
         rightEvents,
-        emittedJoinKeys,
+        emittedJoinKeys
       );
       for (const correlation of finalCorrelations) {
         yield correlation;
@@ -118,6 +181,135 @@ export class StreamJoiner {
     }
   }
 
+  private async processStreamWithCorrelation(
+    stream: AsyncIterable<LogEvent>,
+    ownStorage: Map<string, LogEvent[]>,
+    otherStorage: Map<string, LogEvent[]>,
+    emittedKeys: Set<string>,
+    pushCorrelation: (correlation: CorrelatedEvent) => void,
+    side: "left" | "right"
+  ): Promise<void> {
+    let eventCount = 0;
+    let minTime: number | null = null;
+    let maxTime: number | null = null;
+    let evictedCount = 0;
+    const keyTimes = new Map<string, { min: number; max: number }>();
+    
+    // Limit how many events we store per key to prevent memory exhaustion
+    const MAX_EVENTS_PER_KEY = 100;
+    
+    for await (const event of stream) {
+      eventCount++;
+      const eventTimeMs = new Date(event.timestamp).getTime();
+      
+      // Update time boundaries
+      if (minTime === null || eventTimeMs < minTime) minTime = eventTimeMs;
+      if (maxTime === null || eventTimeMs > maxTime) maxTime = eventTimeMs;
+      
+      // Extract join key
+      const joinKey = this.extractJoinKey(event);
+      if (!joinKey) continue;
+      
+      // Store event with limit
+      if (!ownStorage.has(joinKey)) {
+        ownStorage.set(joinKey, []);
+        keyTimes.set(joinKey, { min: eventTimeMs, max: eventTimeMs });
+      } else {
+        const times = keyTimes.get(joinKey)!;
+        if (eventTimeMs < times.min) times.min = eventTimeMs;
+        if (eventTimeMs > times.max) times.max = eventTimeMs;
+      }
+      
+      const eventList = ownStorage.get(joinKey)!;
+      if (eventList.length < MAX_EVENTS_PER_KEY) {
+        eventList.push(event);
+      } else {
+        // Replace oldest event if we hit the limit
+        eventList.shift();
+        eventList.push(event);
+      }
+      
+      // Check for immediate correlation
+      if (otherStorage.has(joinKey) && !emittedKeys.has(joinKey)) {
+        const otherEvents = otherStorage.get(joinKey)!;
+        const ownEvents = ownStorage.get(joinKey)!;
+        
+        // Check temporal constraint if needed
+        if (this.options.temporal) {
+          const withinTemporal = this.checkTemporalConstraint(ownEvents, otherEvents, this.options.temporal);
+          if (!withinTemporal) continue;
+        }
+        
+        const events = side === "left" 
+          ? [...ownEvents, ...otherEvents]
+          : [...otherEvents, ...ownEvents];
+          
+        const correlation = this.createCorrelation(joinKey, events, "complete");
+        if (correlation) {
+          pushCorrelation(correlation);
+          emittedKeys.add(joinKey);
+          
+          // After emitting, we can free up memory for this key
+          ownStorage.delete(joinKey);
+          keyTimes.delete(joinKey);
+        }
+      }
+      
+      // More aggressive memory management
+      if (eventCount % 5000 === 0) {
+        // Remove keys that have been emitted
+        for (const key of emittedKeys) {
+          if (ownStorage.has(key)) {
+            evictedCount += ownStorage.get(key)?.length || 0;
+            ownStorage.delete(key);
+            keyTimes.delete(key);
+          }
+        }
+        
+        // Also limit total storage size
+        if (ownStorage.size > 10000) {
+          console.log(`[StreamJoiner.${side}] Storage limit reached (${ownStorage.size} keys), removing oldest keys`);
+          const keysToRemove = Array.from(keyTimes.entries())
+            .sort(([, a], [, b]) => a.min - b.min)
+            .slice(0, ownStorage.size - 5000)
+            .map(([key]) => key);
+            
+          for (const key of keysToRemove) {
+            if (!emittedKeys.has(key)) {
+              evictedCount += ownStorage.get(key)?.length || 0;
+              ownStorage.delete(key);
+              keyTimes.delete(key);
+            }
+          }
+        }
+        
+        if (eventCount % 10000 === 0) {
+          const memUsage = process.memoryUsage();
+          console.log(`[StreamJoiner.${side}] Progress: ${eventCount} events, ${ownStorage.size} keys in memory, ${Math.round(memUsage.heapUsed / 1024 / 1024)}MB heap used`);
+        }
+      }
+    }
+    
+    console.log(`[StreamJoiner.${side}] Processed ${eventCount} events, ${ownStorage.size} unique keys, evicted ${evictedCount} events`);
+  }
+  
+  private checkTemporalConstraint(
+    events1: LogEvent[],
+    events2: LogEvent[],
+    temporalMs: number
+  ): boolean {
+    for (const e1 of events1) {
+      const t1 = new Date(e1.timestamp).getTime();
+      for (const e2 of events2) {
+        const t2 = new Date(e2.timestamp).getTime();
+        if (Math.abs(t1 - t2) <= temporalMs) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
   private async processStreamRealtime(
     stream: AsyncIterable<LogEvent>,
     ownStorage: Map<string, LogEvent[]>,
@@ -125,7 +317,7 @@ export class StreamJoiner {
     emittedJoinKeys: Set<string>,
     pushCorrelation: (correlation: CorrelatedEvent) => void,
     eventArrivalTimes: Map<string, number>,
-    side: "left" | "right",
+    side: "left" | "right"
   ): Promise<void> {
     for await (const event of stream) {
       const arrivalTime = Date.now();
@@ -166,7 +358,7 @@ export class StreamJoiner {
         const correlation = this.createCorrelation(
           joinKeyValue,
           events,
-          "complete",
+          "complete"
         );
 
         if (correlation) {
@@ -186,7 +378,7 @@ export class StreamJoiner {
           const correlation = this.createCorrelation(
             joinKeyValue,
             ownEvents,
-            "partial",
+            "partial"
           );
 
           if (correlation) {
@@ -201,7 +393,7 @@ export class StreamJoiner {
   private isEventTooLate(
     event: LogEvent,
     arrivalTime: number,
-    eventArrivalTimes: Map<string, number>,
+    eventArrivalTimes: Map<string, number>
   ): boolean {
     // Check if event arrives too late based on lateTolerance
     for (const [key, firstArrival] of eventArrivalTimes) {
@@ -218,7 +410,7 @@ export class StreamJoiner {
   }
 
   private async emitPendingCorrelations(
-    pendingCorrelations: CorrelatedEvent[],
+    pendingCorrelations: CorrelatedEvent[]
   ): Promise<CorrelatedEvent[]> {
     const emitted: CorrelatedEvent[] = [];
     let index = 0;
@@ -246,7 +438,7 @@ export class StreamJoiner {
   private findRemainingCorrelations(
     leftEvents: Map<string, LogEvent[]>,
     rightEvents: Map<string, LogEvent[]>,
-    emittedJoinKeys: Set<string>,
+    emittedJoinKeys: Set<string>
   ): CorrelatedEvent[] {
     const correlations: CorrelatedEvent[] = [];
 
@@ -261,7 +453,7 @@ export class StreamJoiner {
             const correlation = this.createCorrelation(
               key,
               [...leftEventList, ...rightEvents.get(key)!],
-              "complete",
+              "complete"
             );
             if (correlation) {
               correlations.push(correlation);
@@ -273,7 +465,7 @@ export class StreamJoiner {
             ? this.createCorrelation(
                 key,
                 [...leftEventList, ...rightEvents.get(key)!],
-                "complete",
+                "complete"
               )
             : this.createCorrelation(key, leftEventList, "partial");
 
@@ -291,7 +483,7 @@ export class StreamJoiner {
           const correlation = this.createCorrelation(
             key,
             leftEventList,
-            "partial",
+            "partial"
           );
           if (correlation) {
             correlations.push(correlation);
@@ -305,7 +497,7 @@ export class StreamJoiner {
 
   private isDuplicateCorrelation(
     correlation: CorrelatedEvent,
-    emittedCorrelations: Set<string>,
+    emittedCorrelations: Set<string>
   ): boolean {
     const key = this.generateCorrelationKey(correlation);
     return emittedCorrelations.has(key);
@@ -313,18 +505,104 @@ export class StreamJoiner {
 
   private async processStream(
     stream: AsyncIterable<LogEvent>,
-    storage: Map<string, LogEvent[]>,
+    storage: Map<string, LogEvent[]>
   ): Promise<void> {
+    let eventCount = 0;
+    let keysFound = 0;
+    let minTime: Date | null = null;
+    let maxTime: Date | null = null;
+    let evictedCount = 0;
+    
+    // Track earliest time for each join key to enable smart eviction
+    const keyEarliestTime = new Map<string, number>();
+    
     for await (const event of stream) {
+      eventCount++;
+      
+      // Track time range
+      const eventTime = new Date(event.timestamp);
+      const eventTimeMs = eventTime.getTime();
+      if (!minTime || eventTime < minTime) minTime = eventTime;
+      if (!maxTime || eventTime > maxTime) maxTime = eventTime;
+      
       // Extract join key value
       const joinKeyValue = this.extractJoinKey(event);
-      if (!joinKeyValue) continue;
+      if (!joinKeyValue) {
+        if (eventCount <= 5) {
+          console.log(`[StreamJoiner] Event ${eventCount} has no join key for keys:`, this.options.joinKeys);
+          console.log(`  Labels:`, Object.keys(event.labels || {}).slice(0, 10));
+          console.log(`  JoinKeys:`, Object.keys(event.joinKeys || {}).slice(0, 10));
+          if (event.labels?.request_id !== undefined) {
+            console.log(`  request_id in labels:`, event.labels.request_id);
+          }
+          if (event.joinKeys?.request_id !== undefined) {
+            console.log(`  request_id in joinKeys:`, event.joinKeys.request_id);
+          }
+        }
+        continue;
+      }
 
+      keysFound++;
+      
       // Store event
       if (!storage.has(joinKeyValue)) {
         storage.set(joinKeyValue, []);
+        keyEarliestTime.set(joinKeyValue, eventTimeMs);
+      } else {
+        // Update earliest time if this event is older
+        const currentEarliest = keyEarliestTime.get(joinKeyValue)!;
+        if (eventTimeMs < currentEarliest) {
+          keyEarliestTime.set(joinKeyValue, eventTimeMs);
+        }
       }
       storage.get(joinKeyValue)!.push(event);
+      
+      // Smart eviction: Every 1000 events, check if we can evict old data  
+      // Made more aggressive to prevent memory exhaustion
+      if (eventCount % 1000 === 0 && maxTime) {
+        const maxTimeMs = maxTime.getTime();
+        const evictionThreshold = maxTimeMs - this.options.timeWindow;
+        
+        // Find keys that are too old to possibly join with future events
+        const keysToEvict: string[] = [];
+        for (const [key, earliestTime] of keyEarliestTime) {
+          if (earliestTime < evictionThreshold) {
+            // All events for this key are outside the correlation window
+            const events = storage.get(key);
+            if (events) {
+              // Check if ALL events for this key are too old
+              const allTooOld = events.every(e => 
+                new Date(e.timestamp).getTime() < evictionThreshold
+              );
+              
+              if (allTooOld) {
+                keysToEvict.push(key);
+              }
+            }
+          }
+        }
+        
+        // Evict old keys
+        for (const key of keysToEvict) {
+          const evictedEvents = storage.get(key)?.length || 0;
+          storage.delete(key);
+          keyEarliestTime.delete(key);
+          evictedCount += evictedEvents;
+        }
+        
+        if (keysToEvict.length > 0) {
+          console.log(`[StreamJoiner] Evicted ${keysToEvict.length} keys (${evictedCount} total events evicted) to save memory`);
+          console.log(`[StreamJoiner] Current storage: ${storage.size} keys, window: ${this.options.timeWindow}ms`);
+        }
+      }
+    }
+    
+    console.log(`[StreamJoiner] Processed ${eventCount} events, found ${keysFound} with join keys, unique keys: ${storage.size}`);
+    if (evictedCount > 0) {
+      console.log(`[StreamJoiner] Evicted ${evictedCount} events total that were outside correlation window`);
+    }
+    if (minTime && maxTime) {
+      console.log(`[StreamJoiner] Time range: ${minTime.toISOString()} to ${maxTime.toISOString()}`);
     }
   }
 
@@ -351,7 +629,7 @@ export class StreamJoiner {
   private filterByTemporal(
     leftEvents: LogEvent[],
     rightEvents: LogEvent[],
-    temporalMs: number,
+    temporalMs: number
   ): LogEvent[] {
     const allEvents: LogEvent[] = [];
 
@@ -424,16 +702,23 @@ export class StreamJoiner {
 
   private findCorrelations(
     leftEvents: Map<string, LogEvent[]>,
-    rightEvents: Map<string, LogEvent[]>,
+    rightEvents: Map<string, LogEvent[]>
   ): CorrelatedEvent[] {
     const correlations: CorrelatedEvent[] = [];
     const processedKeys = new Set<string>();
+    
+    console.log(`[StreamJoiner.findCorrelations] Left events: ${leftEvents.size} keys, Right events: ${rightEvents.size} keys`);
 
     // Process based on join type
     if (this.options.joinType === "and") {
       // Inner join - only keys present in both
+      let matchCount = 0;
       for (const [key, leftEventList] of leftEvents) {
         if (rightEvents.has(key) && !processedKeys.has(key)) {
+          matchCount++;
+          if (matchCount <= 3) {
+            console.log(`[StreamJoiner.findCorrelations] Found match for key: ${key}`);
+          }
           const rightEventList = rightEvents.get(key)!;
 
           // Handle grouping modifiers for many-to-one or one-to-many joins
@@ -445,7 +730,7 @@ export class StreamJoiner {
                 const correlation = this.createCorrelation(
                   key,
                   [leftEvent, ...rightEventList],
-                  "complete",
+                  "complete"
                 );
                 if (correlation) {
                   correlations.push(correlation);
@@ -458,7 +743,7 @@ export class StreamJoiner {
                 const correlation = this.createCorrelation(
                   key,
                   [...leftEventList, rightEvent],
-                  "complete",
+                  "complete"
                 );
                 if (correlation) {
                   correlations.push(correlation);
@@ -473,7 +758,7 @@ export class StreamJoiner {
               const filteredEvents = this.filterByTemporal(
                 leftEventList,
                 rightEventList,
-                this.options.temporal,
+                this.options.temporal
               );
 
               if (filteredEvents.length === 0) {
@@ -483,7 +768,7 @@ export class StreamJoiner {
               const correlation = this.createCorrelation(
                 key,
                 filteredEvents,
-                "complete",
+                "complete"
               );
               if (correlation) {
                 correlations.push(correlation);
@@ -492,7 +777,7 @@ export class StreamJoiner {
               const correlation = this.createCorrelation(
                 key,
                 [...leftEventList, ...rightEventList],
-                "complete",
+                "complete"
               );
               if (correlation) {
                 correlations.push(correlation);
@@ -502,6 +787,7 @@ export class StreamJoiner {
           processedKeys.add(key);
         }
       }
+      console.log(`[StreamJoiner.findCorrelations] Inner join found ${matchCount} matching keys`);
     } else if (this.options.joinType === "or") {
       // Left join - all from left, matched from right if available
       for (const [key, leftEventList] of leftEvents) {
@@ -510,7 +796,7 @@ export class StreamJoiner {
           const correlation = this.createCorrelation(
             key,
             [...leftEventList, ...rightEventList],
-            rightEventList.length > 0 ? "complete" : "partial",
+            rightEventList.length > 0 ? "complete" : "partial"
           );
           if (correlation) {
             correlations.push(correlation);
@@ -525,7 +811,7 @@ export class StreamJoiner {
           const correlation = this.createCorrelation(
             key,
             leftEventList,
-            "partial",
+            "partial"
           );
           if (correlation) {
             correlations.push(correlation);
@@ -590,7 +876,7 @@ export class StreamJoiner {
   }
 
   private parseMatchers(
-    expr: string,
+    expr: string
   ): Array<{ label: string; operator: string; value: string }> {
     const matchers: Array<{ label: string; operator: string; value: string }> =
       [];
@@ -616,7 +902,7 @@ export class StreamJoiner {
   private matchValue(
     actual: string | undefined,
     operator: string,
-    expected: string,
+    expected: string
   ): boolean {
     if (!actual) {
       return operator === "!=" || operator === "!~";
@@ -649,7 +935,7 @@ export class StreamJoiner {
   private createCorrelation(
     joinValue: string,
     events: LogEvent[],
-    completeness: "complete" | "partial",
+    completeness: "complete" | "partial"
   ): CorrelatedEvent {
     // Apply filter at event level for backward compatibility with tests
     // The filter could be interpreted two ways:
@@ -666,7 +952,7 @@ export class StreamJoiner {
     // Sort events by timestamp
     filteredEvents.sort(
       (a, b) =>
-        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
     );
 
     const streams = new Set(filteredEvents.map((e) => e.source));

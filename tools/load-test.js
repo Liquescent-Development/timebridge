@@ -189,7 +189,7 @@ class LoadWorker {
       const targetRPS = pattern(
         elapsed,
         this.config.duration,
-        this.config.targetRPS,
+        this.config.targetRPS
       );
       const requestsPerWorker = targetRPS / this.config.workers;
       const delay = 1000 / requestsPerWorker;
@@ -304,7 +304,11 @@ class LoadCoordinator {
     const elapsed = (Date.now() - this.startTime) / 1000;
 
     console.log(
-      `[${elapsed.toFixed(0)}s] Requests: ${aggregated.requests} | Success: ${aggregated.successRate.toFixed(1)}% | P95: ${aggregated.latency.p95.toFixed(0)}ms`,
+      `[${elapsed.toFixed(0)}s] Requests: ${
+        aggregated.requests
+      } | Success: ${aggregated.successRate.toFixed(
+        1
+      )}% | P95: ${aggregated.latency.p95.toFixed(0)}ms`
     );
   }
 
@@ -345,7 +349,7 @@ class LoadCoordinator {
         successes: acc.successes + stats.successes,
         failures: acc.failures + stats.failures,
       }),
-      { requests: 0, successes: 0, failures: 0 },
+      { requests: 0, successes: 0, failures: 0 }
     );
 
     // Merge all latencies
@@ -361,7 +365,7 @@ class LoadCoordinator {
               s.latency.p95,
               s.latency.p99,
             ]
-          : [],
+          : []
       )
       .filter((l) => l > 0)
       .sort((a, b) => a - b);
@@ -443,7 +447,7 @@ class LoadCoordinator {
       }
       if (stats.latency.p95 >= 1000) {
         console.log(
-          `  - P95 latency ${stats.latency.p95.toFixed(0)}ms >= 1000ms`,
+          `  - P95 latency ${stats.latency.p95.toFixed(0)}ms >= 1000ms`
         );
       }
     }
@@ -452,7 +456,7 @@ class LoadCoordinator {
     if (this.config.report) {
       const reportPath = path.join(
         process.cwd(),
-        `load-test-${Date.now()}.json`,
+        `load-test-${Date.now()}.json`
       );
       const report = {
         config: this.config,

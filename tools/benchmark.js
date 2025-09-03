@@ -56,7 +56,9 @@ class DataGenerator {
         session_id: sessionId,
         status: status.toString(),
         user_id: `user_${Math.floor(Math.random() * 1000)}`,
-        endpoint: `/api/v1/${["users", "products", "orders"][Math.floor(Math.random() * 3)]}`,
+        endpoint: `/api/v1/${
+          ["users", "products", "orders"][Math.floor(Math.random() * 3)]
+        }`,
       },
       joinKeys: {
         request_id: requestId,
@@ -349,7 +351,7 @@ class BenchmarkScenarios {
 
     if (CONFIG.verbose) {
       console.log(
-        `Final - Events: ${eventCount}, Correlations: ${correlationCount}`,
+        `Final - Events: ${eventCount}, Correlations: ${correlationCount}`
       );
     }
 
@@ -402,7 +404,7 @@ class BenchmarkScenarios {
 
     if (CONFIG.verbose) {
       console.log(
-        `Final - Events: ${eventCount}, Correlations: ${correlationCount}`,
+        `Final - Events: ${eventCount}, Correlations: ${correlationCount}`
       );
     }
 
@@ -435,7 +437,7 @@ class BenchmarkScenarios {
           }
 
           return count;
-        })(),
+        })()
       );
     }
 
@@ -493,11 +495,11 @@ function formatReport(report) {
   output.push(`  Duration: ${(report.summary.duration / 1000).toFixed(2)}s`);
   output.push(`  Total Events: ${report.summary.totalEvents.toLocaleString()}`);
   output.push(
-    `  Total Correlations: ${report.summary.totalCorrelations.toLocaleString()}`,
+    `  Total Correlations: ${report.summary.totalCorrelations.toLocaleString()}`
   );
   output.push(`  Events/sec: ${report.summary.eventsPerSecond.toFixed(2)}`);
   output.push(
-    `  Correlations/sec: ${report.summary.correlationsPerSecond.toFixed(2)}`,
+    `  Correlations/sec: ${report.summary.correlationsPerSecond.toFixed(2)}`
   );
   output.push(`  Error Rate: ${report.summary.errorRate.toFixed(2)}%`);
 

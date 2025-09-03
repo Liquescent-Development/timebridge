@@ -155,6 +155,7 @@ perf(parser): optimize query parsing for large expressions
 ### PR Review Process
 
 1. **Automated checks** run on all PRs:
+
    - Linting
    - Type checking
    - Unit tests
@@ -163,12 +164,14 @@ perf(parser): optimize query parsing for large expressions
    - Performance benchmarks
 
 2. **Code review** by maintainers:
+
    - Code quality
    - Architecture decisions
    - Performance implications
    - Security considerations
 
 3. **Feedback and iteration**:
+
    - Address reviewer comments
    - Update PR as needed
    - Re-request review when ready

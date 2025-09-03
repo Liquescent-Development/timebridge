@@ -26,7 +26,7 @@ export declare class IndexedEventStore {
    */
   findCorrelations(
     leftKey: string,
-    rightKey: string,
+    rightKey: string
   ): Map<
     string,
     {

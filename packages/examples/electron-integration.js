@@ -1,12 +1,12 @@
 // Electron application integration example
-const { CorrelationEngine } = require("@liquescent/log-correlator-core");
-const { LokiAdapter } = require("@liquescent/log-correlator-loki");
-const { GraylogAdapter } = require("@liquescent/log-correlator-graylog");
+const { TimeBridgeEngine } = require("@timebridge/core");
+const { LokiAdapter } = require("@timebridge/loki");
+const { GraylogAdapter } = require("@timebridge/graylog");
 
 // This would typically be in your Electron main or renderer process
-class IDECorrelationEngine {
+class IDETimeBridgeEngine {
   constructor(config = {}) {
-    this.engine = new CorrelationEngine({
+    this.engine = new TimeBridgeEngine({
       defaultTimeWindow: config.defaultTimeWindow || "5m",
       maxEvents: config.maxEvents || 10000,
       lateTolerance: config.lateTolerance || "30s",
@@ -27,7 +27,7 @@ class IDECorrelationEngine {
           url: config.lokiUrl,
           websocket: config.lokiWebsocket !== false,
           authToken: config.lokiToken,
-        }),
+        })
       );
     }
 
@@ -40,7 +40,7 @@ class IDECorrelationEngine {
           password: config.graylogPassword,
           apiToken: config.graylogToken,
           apiVersion: config.graylogApiVersion || "legacy", // Use "v6" for Graylog 6.x+
-        }),
+        })
       );
     }
   }
@@ -212,7 +212,7 @@ async function main() {
   console.log("============================\n");
 
   // Initialize with configuration (would come from app settings)
-  const correlationEngine = new IDECorrelationEngine({
+  const correlationEngine = new IDETimeBridgeEngine({
     lokiUrl: "http://localhost:3100",
     lokiWebsocket: true,
     graylogUrl: "http://localhost:9000",
@@ -261,7 +261,9 @@ async function main() {
 
   const lokiStreams = await correlationEngine.getAvailableStreams("loki");
   console.log(
-    `  Loki streams: ${lokiStreams.length > 0 ? lokiStreams.join(", ") : "none"}`,
+    `  Loki streams: ${
+      lokiStreams.length > 0 ? lokiStreams.join(", ") : "none"
+    }`
   );
 
   // Example 4: Check adapter status
@@ -269,7 +271,7 @@ async function main() {
   const adapters = correlationEngine.getAdapterStatus();
   adapters.forEach((adapter) => {
     console.log(
-      `  ${adapter.name}: ${adapter.connected ? "connected" : "disconnected"}`,
+      `  ${adapter.name}: ${adapter.connected ? "connected" : "disconnected"}`
     );
   });
 

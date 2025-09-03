@@ -22,7 +22,7 @@ class PeggyQueryParser {
         const parseError = error;
         throw new Error(
           `Query parse error at line ${parseError.location.start.line}, ` +
-            `column ${parseError.location.start.column}: ${parseError.message}`,
+            `column ${parseError.location.start.column}: ${parseError.message}`
         );
       }
       throw error;
@@ -108,7 +108,7 @@ class PeggyQueryParser {
             "within(",
             "ignoring(",
             "group_left(",
-            "group_right(",
+            "group_right("
           );
         }
       }
@@ -119,7 +119,7 @@ class PeggyQueryParser {
         "trace_id",
         "session_id",
         "correlation_id",
-        "span_id",
+        "span_id"
       );
     } else if (beforeCursor.endsWith("{")) {
       // Suggest label keys
@@ -160,7 +160,9 @@ class PeggyQueryParser {
         formatted += ` within(${parsed.temporal})`;
       }
       if (parsed.grouping) {
-        formatted += ` group_${parsed.grouping.side}(${parsed.grouping.labels?.join(", ") || ""})`;
+        formatted += ` group_${parsed.grouping.side}(${
+          parsed.grouping.labels?.join(", ") || ""
+        })`;
       }
       formatted += "\n";
       // Format second stream

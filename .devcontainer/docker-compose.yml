@@ -1,6 +1,8 @@
 services:
   devcontainer:
-    image: ghcr.io/liquescent-development/devcontainer:latest
+    # Uses pre-built image for fastest startup
+    # To build locally instead, use: docker-compose -f docker-compose.local.yml up
+    image: ghcr.io/liquescent-development/liquescent-devcontainer:latest
     
     # Environment variables from .env file are automatically loaded
     environment:

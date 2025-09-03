@@ -24,6 +24,7 @@ git push && git push --tags
 ## Prerequisites for Automated Publishing
 
 1. **NPM_TOKEN** secret must be set in GitHub repository settings
+
    - Get token from npm: `npm token create`
    - Add to GitHub: Settings → Secrets → Actions → New repository secret
    - Name: `NPM_TOKEN`

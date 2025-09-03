@@ -35,7 +35,7 @@ const RELEASE_TYPE =
       "preminor",
       "prepatch",
       "prerelease",
-    ].includes(arg),
+    ].includes(arg)
   ) || "patch";
 
 // Logging utilities
@@ -99,7 +99,7 @@ function getPackages() {
       if (info.resolved?.startsWith("file:")) {
         const pkgPath = path.join(ROOT_DIR, info.resolved.replace("file:", ""));
         const pkgJson = JSON.parse(
-          fs.readFileSync(path.join(pkgPath, "package.json"), "utf8"),
+          fs.readFileSync(path.join(pkgPath, "package.json"), "utf8")
         );
 
         packages.push({
@@ -123,7 +123,7 @@ function checkGitStatus() {
   const status = exec("git status --porcelain");
   if (status) {
     log.error(
-      "Working directory is not clean. Please commit or stash changes.",
+      "Working directory is not clean. Please commit or stash changes."
     );
     console.log(status);
     process.exit(1);
@@ -203,7 +203,7 @@ function updateVersions(packages, newVersion) {
             }
           });
         }
-      },
+      }
     );
 
     // Write updated package.json
@@ -291,7 +291,7 @@ function generateChangelog(version) {
     const existingChangelog = fs.readFileSync(changelogPath, "utf8");
     const updatedChangelog = existingChangelog.replace(
       "# Changelog\n",
-      `# Changelog\n\n${entry}`,
+      `# Changelog\n\n${entry}`
     );
 
     if (!RELEASE_CONFIG.dryRun) {
@@ -409,14 +409,14 @@ function createGitHubRelease(version, changelog) {
 
     const prerelease = RELEASE_CONFIG.prerelease ? "--prerelease" : "";
     exec(
-      `gh release create v${version} --title "v${version}" --notes "${releaseNotes}" ${prerelease}`,
+      `gh release create v${version} --title "v${version}" --notes "${releaseNotes}" ${prerelease}`
     );
 
     log.success("GitHub release created");
   } catch {
     log.warn("GitHub CLI not found. Create release manually at:");
     console.log(
-      `https://github.com/liquescent/log-correlator/releases/new?tag=v${version}`,
+      `https://github.com/liquescent/log-correlator/releases/new?tag=v${version}`
     );
   }
 }

@@ -96,7 +96,7 @@ module.exports = {
         process.env.GRAYLOG_QUERY_SERVICE || "source:nginx OR source:apache",
 
       // Find all messages (use with caution)
-      allLogs: "*",
+      allLogs: "_exists_:message",
     },
 
     // Complex queries with field combinations

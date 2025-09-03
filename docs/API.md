@@ -49,7 +49,7 @@ engine.addAdapter(
   "loki",
   new LokiAdapter({
     url: "http://localhost:3100",
-  }),
+  })
 );
 ```
 
@@ -292,7 +292,7 @@ Get autocomplete suggestions at a cursor position.
 ```javascript
 const suggestions = parser.getSuggestions(
   'loki({service="test"})[5m] and on(',
-  35,
+  35
 );
 // Returns: ['request_id', 'trace_id', 'session_id', ...]
 ```

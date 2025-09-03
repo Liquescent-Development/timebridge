@@ -1,24 +1,27 @@
 {
-  "name": "@liquescent/log-correlator-loki",
+  "name": "@timebridge/loki",
   "version": "0.0.7",
-  "description": "Loki adapter for log-correlator",
+  "description": "Loki adapter for TimeBridge - Grafana Loki log connector",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "tsc",
-    "clean": "rm -rf dist",
-    "test": "jest --passWithNoTests"
+    "build": "npm run generate-parser && tsc",
+    "clean": "rm -rf dist src/generated",
+    "test": "jest --passWithNoTests",
+    "generate-parser": "peggy --format commonjs -o src/generated/logql-parser.js grammar/logql.peggy"
   },
   "keywords": [
+    "timebridge",
     "loki",
     "logs",
     "adapter",
-    "grafana"
+    "grafana",
+    "time-series"
   ],
   "author": "",
   "license": "AGPL-3.0",
   "dependencies": {
-    "@liquescent/log-correlator-core": "file:../../core",
+    "@timebridge/core": "file:../../core",
     "node-fetch": "^2.7.0",
     "socks-proxy-agent": "^8.0.5",
     "ws": "^8.14.0"
@@ -29,6 +32,7 @@
     "@types/node-fetch": "^2.6.0",
     "@types/ws": "^8.5.0",
     "jest": "^29.7.0",
+    "peggy": "^3.0.2",
     "ts-jest": "^29.1.1",
     "typescript": "^5.2.2"
   },

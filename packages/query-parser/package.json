@@ -1,27 +1,31 @@
 {
-  "name": "@liquescent/log-correlator-query-parser",
+  "name": "@timebridge/timeql-parser",
   "version": "0.0.7",
-  "description": "PromQL-style query parser for log correlation",
+  "description": "TimeQL query parser for TimeBridge - time-series correlation language",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "generate-parser": "peggy --format commonjs -o src/generated/parser.js grammar/logql.peggy",
+    "generate-parser": "peggy --format commonjs -o src/generated/parser.js grammar/timeql.peggy",
     "prebuild": "npm run generate-parser",
     "build": "tsc && cp -r src/generated dist/generated",
     "clean": "rm -rf dist",
     "clean:all": "rm -rf dist src/generated",
-    "test": "jest"
+    "test": "jest",
+    "test:unit": "jest --testPathIgnorePatterns=/integration/",
+    "test:integration": "jest test/integration"
   },
   "keywords": [
-    "promql",
+    "timeql",
+    "timebridge",
     "query",
     "parser",
-    "logs"
+    "time-series",
+    "correlation"
   ],
   "author": "",
   "license": "AGPL-3.0",
   "dependencies": {
-    "@liquescent/log-correlator-core": "file:../core",
+    "@timebridge/core": "file:../core",
     "peggy": "^3.0.2"
   },
   "devDependencies": {

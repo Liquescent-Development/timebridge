@@ -50,7 +50,7 @@ export class EventDeduplicator {
    * Filter out duplicate events from a stream
    */
   async *deduplicate<T extends LogEvent>(
-    stream: AsyncIterable<T>,
+    stream: AsyncIterable<T>
   ): AsyncGenerator<T> {
     for await (const event of stream) {
       if (!this.isDuplicate(event)) {

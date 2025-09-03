@@ -1,0 +1,86 @@
+version: '3.8'
+
+services:
+  # Grafana for visualization and data source management
+  grafana:
+    image: grafana/grafana:latest
+    container_name: timebridge-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_DISABLE_LOGIN_FORM=false
+    volumes:
+      - grafana-storage:/var/lib/grafana
+      - ./grafana-provisioning:/etc/grafana/provisioning
+    networks:
+      - timebridge-network
+
+  # Loki for log aggregation
+  loki:
+    image: grafana/loki:2.9.0
+    container_name: timebridge-loki
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - timebridge-network
+
+  # Prometheus for metrics
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: timebridge-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus-test.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    networks:
+      - timebridge-network
+
+  # InfluxDB for time series data
+  influxdb:
+    image: influxdb:2.7
+    container_name: timebridge-influxdb
+    ports:
+      - "8086:8086"
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=admin
+      - DOCKER_INFLUXDB_INIT_PASSWORD=admin123
+      - DOCKER_INFLUXDB_INIT_ORG=timebridge
+      - DOCKER_INFLUXDB_INIT_BUCKET=test
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=test-token-123
+    volumes:
+      - influxdb-storage:/var/lib/influxdb2
+    networks:
+      - timebridge-network
+
+  # Promtail to feed logs to Loki
+  promtail:
+    image: grafana/promtail:2.9.0
+    container_name: timebridge-promtail
+    volumes:
+      - /var/log:/var/log:ro
+      - ./promtail-config.yml:/etc/promtail/config.yml
+    command: -config.file=/etc/promtail/config.yml
+    networks:
+      - timebridge-network
+
+volumes:
+  grafana-storage:
+  prometheus-data:
+  influxdb-storage:
+
+networks:
+  timebridge-network:
+    driver: bridge

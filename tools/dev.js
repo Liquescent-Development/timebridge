@@ -122,7 +122,7 @@ function setupWatcher() {
       ignored: /(^|[\\/\\])\\../, // Ignore dotfiles
       persistent: true,
       ignoreInitial: true,
-    },
+    }
   );
 
   // Debounce mechanism
@@ -179,9 +179,10 @@ function startExampleServer() {
   // API endpoint for testing
   app.get("/api/correlate", async (req, res) => {
     try {
-      const { CorrelationEngine } = require(
-        path.join(ROOT_DIR, "packages/core/dist"),
-      );
+      const { CorrelationEngine } = require(path.join(
+        ROOT_DIR,
+        "packages/core/dist"
+      ));
       const engine = new CorrelationEngine();
 
       const query = req.query.q || 'loki({service="test"})[5m]';

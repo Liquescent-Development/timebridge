@@ -23,7 +23,7 @@ export declare class MultiStreamJoiner {
     streams: Array<{
       name: string;
       stream: AsyncIterable<LogEvent>;
-    }>,
+    }>
   ): AsyncGenerator<CorrelatedEvent>;
   private processStream;
   private extractJoinKey;

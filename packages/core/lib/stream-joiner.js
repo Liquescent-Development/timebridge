@@ -43,7 +43,7 @@ class StreamJoiner {
       emittedJoinKeys,
       correlationChannel.push,
       eventArrivalTimes,
-      "left",
+      "left"
     );
     const rightPromise = this.processStreamRealtime(
       rightStream,
@@ -52,13 +52,13 @@ class StreamJoiner {
       emittedJoinKeys,
       correlationChannel.push,
       eventArrivalTimes,
-      "right",
+      "right"
     );
     // Create a promise that resolves when both streams are done
     const streamsComplete = Promise.all([leftPromise, rightPromise]).then(
       () => {
         correlationChannel.close();
-      },
+      }
     );
     try {
       // Yield correlations as they become available
@@ -71,7 +71,7 @@ class StreamJoiner {
       const finalCorrelations = this.findRemainingCorrelations(
         leftEvents,
         rightEvents,
-        emittedJoinKeys,
+        emittedJoinKeys
       );
       for (const correlation of finalCorrelations) {
         yield correlation;
@@ -87,7 +87,7 @@ class StreamJoiner {
     emittedJoinKeys,
     pushCorrelation,
     eventArrivalTimes,
-    side,
+    side
   ) {
     for await (const event of stream) {
       const arrivalTime = Date.now();
@@ -121,7 +121,7 @@ class StreamJoiner {
         const correlation = this.createCorrelation(
           joinKeyValue,
           events,
-          "complete",
+          "complete"
         );
         if (correlation) {
           // Only emit on first match for this join key
@@ -140,7 +140,7 @@ class StreamJoiner {
           const correlation = this.createCorrelation(
             joinKeyValue,
             ownEvents,
-            "partial",
+            "partial"
           );
           if (correlation) {
             pushCorrelation(correlation);
@@ -198,7 +198,7 @@ class StreamJoiner {
             const correlation = this.createCorrelation(
               key,
               [...leftEventList, ...rightEvents.get(key)],
-              "complete",
+              "complete"
             );
             if (correlation) {
               correlations.push(correlation);
@@ -210,7 +210,7 @@ class StreamJoiner {
             ? this.createCorrelation(
                 key,
                 [...leftEventList, ...rightEvents.get(key)],
-                "complete",
+                "complete"
               )
             : this.createCorrelation(key, leftEventList, "partial");
           if (finalCorrelation) {
@@ -226,7 +226,7 @@ class StreamJoiner {
           const correlation = this.createCorrelation(
             key,
             leftEventList,
-            "partial",
+            "partial"
           );
           if (correlation) {
             correlations.push(correlation);
@@ -346,7 +346,7 @@ class StreamJoiner {
                 const correlation = this.createCorrelation(
                   key,
                   [leftEvent, ...rightEventList],
-                  "complete",
+                  "complete"
                 );
                 if (correlation) {
                   correlations.push(correlation);
@@ -359,7 +359,7 @@ class StreamJoiner {
                 const correlation = this.createCorrelation(
                   key,
                   [...leftEventList, rightEvent],
-                  "complete",
+                  "complete"
                 );
                 if (correlation) {
                   correlations.push(correlation);
@@ -374,7 +374,7 @@ class StreamJoiner {
               const filteredEvents = this.filterByTemporal(
                 leftEventList,
                 rightEventList,
-                this.options.temporal,
+                this.options.temporal
               );
               if (filteredEvents.length === 0) {
                 continue; // Skip this correlation if no events match temporal constraint
@@ -382,7 +382,7 @@ class StreamJoiner {
               const correlation = this.createCorrelation(
                 key,
                 filteredEvents,
-                "complete",
+                "complete"
               );
               if (correlation) {
                 correlations.push(correlation);
@@ -391,7 +391,7 @@ class StreamJoiner {
               const correlation = this.createCorrelation(
                 key,
                 [...leftEventList, ...rightEventList],
-                "complete",
+                "complete"
               );
               if (correlation) {
                 correlations.push(correlation);
@@ -409,7 +409,7 @@ class StreamJoiner {
           const correlation = this.createCorrelation(
             key,
             [...leftEventList, ...rightEventList],
-            rightEventList.length > 0 ? "complete" : "partial",
+            rightEventList.length > 0 ? "complete" : "partial"
           );
           if (correlation) {
             correlations.push(correlation);
@@ -424,7 +424,7 @@ class StreamJoiner {
           const correlation = this.createCorrelation(
             key,
             leftEventList,
-            "partial",
+            "partial"
           );
           if (correlation) {
             correlations.push(correlation);
@@ -537,7 +537,7 @@ class StreamJoiner {
     // Sort events by timestamp
     filteredEvents.sort(
       (a, b) =>
-        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
     );
     const streams = new Set(filteredEvents.map((e) => e.source));
     const earliestTime = filteredEvents[0].timestamp;

@@ -24,6 +24,7 @@ We take the security of our software seriously. If you believe you have found a 
 1. **Email us directly** at: security@liquescent.io (or create a private security advisory on GitHub)
 
 2. **Include the following information**:
+
    - Type of vulnerability (e.g., XSS, SQL Injection, RCE)
    - Full paths of source file(s) related to the vulnerability
    - The location of the affected source code (tag/branch/commit or direct URL)

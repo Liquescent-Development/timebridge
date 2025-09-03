@@ -7,8 +7,12 @@ interface GeneratedParser {
 }
 
 interface ParseResult {
-  leftStream: StreamQuery;
-  rightStream: StreamQuery & { join?: JoinInfo };
+  type?: 'direct' | 'correlation';
+  // For direct queries
+  stream?: StreamQuery;
+  // For correlation queries
+  leftStream?: StreamQuery;
+  rightStream?: StreamQuery & { join?: JoinInfo };
   joinType?: string;
   joinKeys?: string[];
   temporal?: string;
@@ -41,7 +45,7 @@ try {
     generatedParser = require("../generated/parser.js");
   } catch (e2) {
     throw new Error(
-      "Failed to load generated parser. Please ensure the package was built correctly.",
+      "Failed to load generated parser. Please ensure the package was built correctly."
     );
   }
 }
@@ -76,7 +80,7 @@ export class PeggyQueryParser {
         };
         throw new Error(
           `Query parse error at line ${parseError.location.start.line}, ` +
-            `column ${parseError.location.start.column}: ${parseError.message}`,
+            `column ${parseError.location.start.column}: ${parseError.message}`
         );
       }
       throw error;
@@ -84,6 +88,23 @@ export class PeggyQueryParser {
   }
 
   private transformParseResult(result: ParseResult): ParsedQueryExtended {
+    // Handle direct queries (single stream)
+    if (result.type === 'direct' && result.stream) {
+      // Return a special format for direct queries
+      // We'll use leftStream for the single stream to maintain compatibility
+      return {
+        leftStream: result.stream,
+        rightStream: null as any, // No right stream for direct queries
+        joinType: 'and' as JoinType, // Default, not used
+        joinKeys: [],
+        timeWindow: result.stream.timeRange,
+        filter: result.filter,
+        // Add a flag to indicate this is a direct query
+        additionalStreams: undefined,
+      };
+    }
+
+    // Handle correlation queries (multi-stream)
     // Extract join info from the right stream (where it's attached by the grammar)
     const join = result.rightStream?.join || {};
 
@@ -107,11 +128,11 @@ export class PeggyQueryParser {
 
     // Transform Peggy output to our expected format
     return {
-      leftStream: result.leftStream,
-      rightStream: result.rightStream,
+      leftStream: result.leftStream!,
+      rightStream: result.rightStream!,
       joinType,
       joinKeys: join.keys || result.joinKeys || [],
-      timeWindow: result.leftStream.timeRange,
+      timeWindow: result.leftStream?.timeRange,
       temporal: join.temporal || result.temporal,
       grouping,
       ignoring: join.ignoring || result.ignoring,
@@ -124,12 +145,15 @@ export class PeggyQueryParser {
   validate(query: string): { valid: boolean; error?: string; details?: any } {
     try {
       const parsed = this.parse(query);
+      const isDirect = !parsed.rightStream;
+      
       return {
         valid: true,
         details: {
-          streams: parsed.additionalStreams
+          type: isDirect ? 'direct' : 'correlation',
+          streams: isDirect ? 1 : (parsed.additionalStreams
             ? 2 + parsed.additionalStreams.length
-            : 2,
+            : 2),
           joinType: parsed.joinType,
           temporal: !!parsed.temporal,
           hasFilter: !!parsed.filter,
@@ -143,6 +167,30 @@ export class PeggyQueryParser {
         valid: false,
         error: error instanceof Error ? error.message : "Unknown error",
       };
+    }
+  }
+
+  /**
+   * Check if a query is a direct (single-stream) query
+   */
+  isDirect(query: string): boolean {
+    try {
+      const parsed = this.parse(query);
+      return !parsed.rightStream;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Check if a query is a correlation (multi-stream) query
+   */
+  isCorrelation(query: string): boolean {
+    try {
+      const parsed = this.parse(query);
+      return !!parsed.rightStream;
+    } catch {
+      return false;
     }
   }
 
@@ -170,7 +218,7 @@ export class PeggyQueryParser {
             "within(",
             "ignoring(",
             "group_left(",
-            "group_right(",
+            "group_right("
           );
         }
       }
@@ -181,7 +229,7 @@ export class PeggyQueryParser {
         "trace_id",
         "session_id",
         "correlation_id",
-        "span_id",
+        "span_id"
       );
     } else if (beforeCursor.endsWith("{")) {
       // Suggest label keys
@@ -202,7 +250,7 @@ export class PeggyQueryParser {
       }
     } else if (!beforeCursor.trim()) {
       // At the beginning, suggest sources
-      suggestions.push("loki(", "graylog(", "promql(");
+      suggestions.push("loki(", "graylog(", "prometheus(", "influxdb(");
     }
 
     return suggestions;
@@ -227,7 +275,9 @@ export class PeggyQueryParser {
         formatted += ` within(${parsed.temporal})`;
       }
       if (parsed.grouping) {
-        formatted += ` group_${parsed.grouping.side}(${parsed.grouping.labels?.join(", ") || ""})`;
+        formatted += ` group_${parsed.grouping.side}(${
+          parsed.grouping.labels?.join(", ") || ""
+        })`;
       }
       formatted += "\n";
 

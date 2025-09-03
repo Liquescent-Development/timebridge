@@ -108,7 +108,7 @@ function parseCommit(commit) {
 
   // Parse conventional commit format
   const conventionalMatch = safeSubject.match(
-    /^(\w+)(?:\(([^)]+)\))?!?:\s*(.+)/,
+    /^(\w+)(?:\(([^)]+)\))?!?:\s*(.+)/
   );
 
   if (conventionalMatch) {
@@ -322,14 +322,14 @@ function generateChangelog() {
   sections.push("# Changelog");
   sections.push("");
   sections.push(
-    "All notable changes to this project will be documented in this file.",
+    "All notable changes to this project will be documented in this file."
   );
   sections.push("");
   sections.push(
-    "The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),",
+    "The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),"
   );
   sections.push(
-    "and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).",
+    "and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)."
   );
   sections.push("");
 
@@ -379,13 +379,13 @@ function generateChangelog() {
       for (let i = 0; i < tags.length - 1; i++) {
         const version = tags[i].replace(/^v/, "");
         sections.push(
-          `[${version}]: ${repoUrl}/compare/${tags[i + 1]}...${tags[i]}`,
+          `[${version}]: ${repoUrl}/compare/${tags[i + 1]}...${tags[i]}`
         );
       }
 
       const firstVersion = tags[tags.length - 1].replace(/^v/, "");
       sections.push(
-        `[${firstVersion}]: ${repoUrl}/releases/tag/${tags[tags.length - 1]}`,
+        `[${firstVersion}]: ${repoUrl}/releases/tag/${tags[tags.length - 1]}`
       );
     }
   }
@@ -496,7 +496,7 @@ function main() {
       content = generateSection(
         "Custom Range",
         new Date().toISOString().split("T")[0],
-        groups,
+        groups
       );
     } else {
       // Generate full changelog

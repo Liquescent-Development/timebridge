@@ -1,7 +1,7 @@
 {
-  "name": "@liquescent/log-correlator-core",
+  "name": "@timebridge/core",
   "version": "0.0.7",
-  "description": "Core correlation engine for real-time log stream processing",
+  "description": "Core engine for TimeBridge - unified time-series data correlation",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
@@ -11,17 +11,21 @@
     "prepublishOnly": "npm run build"
   },
   "keywords": [
-    "logs",
+    "timebridge",
+    "timeql",
+    "time-series",
     "correlation",
+    "observability",
+    "metrics",
+    "logs",
     "streaming",
-    "real-time",
-    "loki",
-    "graylog"
+    "real-time"
   ],
   "author": "",
   "license": "AGPL-3.0",
   "dependencies": {
-    "@liquescent/log-correlator-query-parser": "file:../query-parser",
+    "@timebridge/timeql-parser": "file:../query-parser",
+    "duckdb": "^1.3.2",
     "eventemitter3": "^5.0.1",
     "lru-cache": "^11.1.0"
   },

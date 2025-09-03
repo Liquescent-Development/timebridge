@@ -1,5 +1,5 @@
 import { LogEvent, CorrelatedEvent } from "./types";
-import { JoinType } from "@liquescent/log-correlator-query-parser";
+import { JoinType } from "@timebridge/timeql-parser";
 import { parseTimeWindow } from "./utils";
 
 export interface MultiStreamJoinerOptions {
@@ -35,7 +35,7 @@ export class MultiStreamJoiner {
   }
 
   async *joinMultiple(
-    streams: Array<{ name: string; stream: AsyncIterable<LogEvent> }>,
+    streams: Array<{ name: string; stream: AsyncIterable<LogEvent> }>
   ): AsyncGenerator<CorrelatedEvent> {
     const streamData: StreamData[] = streams.map((s) => ({
       name: s.name,
@@ -45,7 +45,7 @@ export class MultiStreamJoiner {
 
     // Process all streams concurrently
     const promises = streamData.map((sd) =>
-      this.processStream(sd.stream, sd.events, sd.name),
+      this.processStream(sd.stream, sd.events, sd.name)
     );
 
     // Start correlation checking
@@ -73,7 +73,7 @@ export class MultiStreamJoiner {
   private async processStream(
     stream: AsyncIterable<LogEvent>,
     storage: Map<string, LogEvent[]>,
-    _streamName: string,
+    _streamName: string
   ): Promise<void> {
     for await (const event of stream) {
       const joinKeyValue = this.extractJoinKey(event);
@@ -112,7 +112,7 @@ export class MultiStreamJoiner {
   }
 
   private findMultiStreamCorrelations(
-    streamData: StreamData[],
+    streamData: StreamData[]
   ): CorrelatedEvent[] {
     const correlations: CorrelatedEvent[] = [];
     const processedKeys = new Set<string>();
@@ -144,7 +144,7 @@ export class MultiStreamJoiner {
       // Apply join type logic
       const shouldInclude = this.shouldIncludeCorrelation(
         matchedStreams.length,
-        streamData.length,
+        streamData.length
       );
 
       if (shouldInclude && eventsForKey.length > 0) {
@@ -157,8 +157,8 @@ export class MultiStreamJoiner {
               key,
               temporalFiltered,
               matchedStreams,
-              streamData.length,
-            ),
+              streamData.length
+            )
           );
         }
       }
@@ -171,7 +171,7 @@ export class MultiStreamJoiner {
 
   private shouldIncludeCorrelation(
     matchedCount: number,
-    totalStreams: number,
+    totalStreams: number
   ): boolean {
     switch (this.options.joinType) {
       case "and":
@@ -196,7 +196,7 @@ export class MultiStreamJoiner {
     // Sort events by timestamp
     const sorted = [...events].sort(
       (a, b) =>
-        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
     );
 
     if (sorted.length === 0) return [];
@@ -249,7 +249,7 @@ export class MultiStreamJoiner {
         const [, field, value] = exactMatch;
 
         const hasMatch = correlation.events.some(
-          (event) => event.labels[field] === value,
+          (event) => event.labels[field] === value
         );
 
         if (!hasMatch) return false;
@@ -263,12 +263,12 @@ export class MultiStreamJoiner {
     joinValue: string,
     events: LogEvent[],
     matchedStreams: string[],
-    totalStreams: number,
+    totalStreams: number
   ): CorrelatedEvent {
     // Sort events by timestamp
     events.sort(
       (a, b) =>
-        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
     );
 
     const earliestTime = events[0].timestamp;

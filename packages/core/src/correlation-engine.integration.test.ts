@@ -1,4 +1,4 @@
-import { CorrelationEngine } from "./correlation-engine";
+import { TimeBridgeEngine } from "./correlation-engine";
 import { DataSourceAdapter, LogEvent, CorrelatedEvent } from "./types";
 
 // Mock adapter for testing
@@ -11,7 +11,7 @@ class MockAdapter implements DataSourceAdapter {
 
     // Create a filtered copy to avoid interference between streams
     const filteredEvents = this.events.filter(
-      (event) => !filters || this.matchesFilters(event, filters),
+      (event) => !filters || this.matchesFilters(event, filters)
     );
 
     for (const event of filteredEvents) {
@@ -38,7 +38,7 @@ class MockAdapter implements DataSourceAdapter {
 
   private matchesFilters(
     event: LogEvent,
-    filters: Record<string, string>,
+    filters: Record<string, string>
   ): boolean {
     for (const [key, value] of Object.entries(filters)) {
       if (event.labels?.[key] !== value) {
@@ -61,11 +61,11 @@ class MockAdapter implements DataSourceAdapter {
   }
 }
 
-describe("CorrelationEngine Integration", () => {
-  let engine: CorrelationEngine;
+describe("TimeBridgeEngine Integration", () => {
+  let engine: TimeBridgeEngine;
 
   beforeEach(() => {
-    engine = new CorrelationEngine({
+    engine = new TimeBridgeEngine({
       timeWindow: 5000,
       maxEvents: 100,
       lateTolerance: 1000,
@@ -104,7 +104,7 @@ describe("CorrelationEngine Integration", () => {
 
       engine.addAdapter(
         "mock",
-        new MockAdapter([...frontendEvents, ...backendEvents]),
+        new MockAdapter([...frontendEvents, ...backendEvents])
       );
 
       const query = `mock({service="frontend"})[5m] and on(request_id) mock({service="backend"})[5m]`;
@@ -331,10 +331,10 @@ describe("CorrelationEngine Integration", () => {
       results.forEach((result) => {
         expect(result.events).toHaveLength(2);
         const frontendEvents = result.events.filter(
-          (e) => e.labels.service === "frontend",
+          (e) => e.labels.service === "frontend"
         );
         const backendEvents = result.events.filter(
-          (e) => e.labels.service === "backend",
+          (e) => e.labels.service === "backend"
         );
         expect(frontendEvents).toHaveLength(1);
         expect(backendEvents).toHaveLength(1);
@@ -345,7 +345,7 @@ describe("CorrelationEngine Integration", () => {
         .map(
           (r) =>
             r.events.find((e) => e.labels.service === "frontend")!.labels
-              .session_id,
+              .session_id
         )
         .sort();
       expect(sessionIds).toEqual(["session1", "session2"]);
@@ -399,10 +399,10 @@ describe("CorrelationEngine Integration", () => {
       results.forEach((result) => {
         expect(result.events).toHaveLength(2);
         const frontendEvents = result.events.filter(
-          (e) => e.labels.service === "frontend",
+          (e) => e.labels.service === "frontend"
         );
         const backendEvents = result.events.filter(
-          (e) => e.labels.service === "backend",
+          (e) => e.labels.service === "backend"
         );
         expect(frontendEvents).toHaveLength(1);
         expect(backendEvents).toHaveLength(1);
@@ -413,7 +413,7 @@ describe("CorrelationEngine Integration", () => {
         .map(
           (r) =>
             r.events.find((e) => e.labels.service === "backend")!.labels
-              .operation,
+              .operation
         )
         .sort();
       expect(operations).toEqual(["auth", "validate"]);
@@ -460,7 +460,7 @@ describe("CorrelationEngine Integration", () => {
         .map(
           (r) =>
             r.events.find((e) => e.labels.service === "frontend")!.labels
-              .user_id,
+              .user_id
         )
         .sort();
       expect(frontendUserIds).toEqual(["user1", "user2"]);
@@ -468,7 +468,7 @@ describe("CorrelationEngine Integration", () => {
       // All correlations should include the same backend event
       results.forEach((result) => {
         const backendEvent = result.events.find(
-          (e) => e.labels.service === "backend",
+          (e) => e.labels.service === "backend"
         );
         expect(backendEvent!.message).toBe("Backend Processing");
       });
@@ -546,7 +546,7 @@ describe("CorrelationEngine Integration", () => {
             service: "highvolume",
             batch_id: `batch${Math.floor(i / 100)}`,
           },
-        }),
+        })
       );
 
       engine.addAdapter("mock", new MockAdapter(largeEventStream));

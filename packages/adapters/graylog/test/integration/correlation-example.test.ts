@@ -1,5 +1,5 @@
 /**
- * Example test demonstrating how the Graylog adapter works with the CorrelationEngine
+ * Example test demonstrating how the Graylog adapter works with the TimeBridgeEngine
  * for correlation queries like:
  * graylog(traceId:trace_12345)[1h] and on(traceId) graylog(traceId:trace_12345)[1h]
  *
@@ -8,13 +8,13 @@
  */
 
 import { GraylogAdapter } from "../../src/graylog-adapter";
-import { CorrelationEngine } from "@liquescent/log-correlator-core";
+import { TimeBridgeEngine } from "@timebridge/core";
 import * as fs from "fs";
 import * as path from "path";
 
 // Load configuration
 const configPath = fs.existsSync(
-  path.join(__dirname, "graylog.config.local.js"),
+  path.join(__dirname, "graylog.config.local.js")
 )
   ? "./graylog.config.local.js"
   : "./graylog.config.js";
@@ -32,7 +32,7 @@ async function collectCorrelationEvents(
   engine: any,
   query: string,
   maxEvents: number = 5,
-  timeoutMs: number = 10000,
+  timeoutMs: number = 10000
 ): Promise<any[]> {
   const events: any[] = [];
   const startTime = Date.now();
@@ -49,7 +49,7 @@ async function collectCorrelationEvents(
 
       if (Date.now() - startTime > timeoutMs) {
         console.log(
-          `  ⏱️ Timeout after ${timeoutMs}ms, collected ${events.length} events`,
+          `  ⏱️ Timeout after ${timeoutMs}ms, collected ${events.length} events`
         );
         break;
       }
@@ -63,7 +63,7 @@ async function collectCorrelationEvents(
 
 describeOrSkip("Graylog Correlation Engine Integration", () => {
   let adapter: GraylogAdapter;
-  let engine: CorrelationEngine;
+  let engine: TimeBridgeEngine;
 
   beforeAll(() => {
     if (!config.connection.url) {
@@ -101,7 +101,7 @@ describeOrSkip("Graylog Correlation Engine Integration", () => {
 
     // Create adapter and engine
     adapter = new GraylogAdapter(adapterConfig);
-    engine = new CorrelationEngine();
+    engine = new TimeBridgeEngine();
     engine.addAdapter("graylog", adapter);
   });
 
@@ -134,10 +134,10 @@ describeOrSkip("Graylog Correlation Engine Integration", () => {
   describe("Correlation Query Support", () => {
     it("should demonstrate how correlation queries work with the engine", async () => {
       // This demonstrates the actual query syntax that would be used
-      // The CorrelationEngine parses this and calls the adapter appropriately
+      // The TimeBridgeEngine parses this and calls the adapter appropriately
 
       // Example 1: Simple correlation query with two sources
-      // The CorrelationEngine requires at least two streams for correlation
+      // The TimeBridgeEngine requires at least two streams for correlation
       const simpleQuery =
         "graylog(tier:prd)[5m] and on(request_id) graylog(tier:prd)[5m]";
 
@@ -148,7 +148,7 @@ describeOrSkip("Graylog Correlation Engine Integration", () => {
         engine,
         simpleQuery,
         5,
-        5000,
+        5000
       );
 
       console.log(`  ✅ Retrieved ${events.length} events`);
@@ -191,14 +191,14 @@ describeOrSkip("Graylog Correlation Engine Integration", () => {
       console.log("\n📊 Testing correlation query with joins:");
       console.log(`  Query: ${correlationQuery}`);
       console.log(
-        "  This query correlates all logs with request_id to error logs with matching request_id",
+        "  This query correlates all logs with request_id to error logs with matching request_id"
       );
 
       const correlatedEvents = await collectCorrelationEvents(
         engine,
         correlationQuery,
         5,
-        5000,
+        5000
       );
 
       console.log(`  ✅ Found ${correlatedEvents.length} correlated events`);
@@ -206,10 +206,10 @@ describeOrSkip("Graylog Correlation Engine Integration", () => {
       if (correlatedEvents.length > 0) {
         // Check if correlations have join keys
         const correlationsWithJoinKeys = correlatedEvents.filter(
-          (e) => e.joinKey && e.joinValue,
+          (e) => e.joinKey && e.joinValue
         );
         console.log(
-          `  📎 Correlations with join keys: ${correlationsWithJoinKeys.length}`,
+          `  📎 Correlations with join keys: ${correlationsWithJoinKeys.length}`
         );
 
         if (correlationsWithJoinKeys.length > 0) {
@@ -220,14 +220,14 @@ describeOrSkip("Graylog Correlation Engine Integration", () => {
             }
           });
           console.log(
-            `  🔑 Join key fields used: ${Array.from(joinKeyFields).join(", ")}`,
+            `  🔑 Join key fields used: ${Array.from(joinKeyFields).join(", ")}`
           );
 
           // Also check individual events for join keys
           const firstCorrelation = correlationsWithJoinKeys[0];
           if (firstCorrelation.events && firstCorrelation.events.length > 0) {
             console.log(
-              `  📦 Events in first correlation: ${firstCorrelation.events.length}`,
+              `  📦 Events in first correlation: ${firstCorrelation.events.length}`
             );
             console.log(`  🔗 Join value: ${firstCorrelation.joinValue}`);
           }
@@ -248,7 +248,7 @@ describeOrSkip("Graylog Correlation Engine Integration", () => {
         const events = await collectCorrelationEvents(engine, query, 3, 5000);
 
         console.log(
-          `  ✅ [${window}] window: ${events.length} events retrieved`,
+          `  ✅ [${window}] window: ${events.length} events retrieved`
         );
 
         // Instead of checking against "now", verify that all events in a correlation
@@ -264,7 +264,7 @@ describeOrSkip("Graylog Correlation Engine Integration", () => {
 
             // Find the time range of events in this correlation
             const eventTimes = correlation.events.map((event: any) =>
-              new Date(event.timestamp).getTime(),
+              new Date(event.timestamp).getTime()
             );
             const minTime = Math.min(...eventTimes);
             const maxTime = Math.max(...eventTimes);
@@ -277,13 +277,13 @@ describeOrSkip("Graylog Correlation Engine Integration", () => {
 
           if (!correlationsValid) {
             console.log(
-              `  ⚠️ [${window}] window: Some correlations span too much time`,
+              `  ⚠️ [${window}] window: Some correlations span too much time`
             );
             const invalidCorrelation = events.find((correlation) => {
               if (!correlation.events || correlation.events.length === 0)
                 return false;
               const eventTimes = correlation.events.map((event: any) =>
-                new Date(event.timestamp).getTime(),
+                new Date(event.timestamp).getTime()
               );
               const minTime = Math.min(...eventTimes);
               const maxTime = Math.max(...eventTimes);
@@ -295,16 +295,18 @@ describeOrSkip("Graylog Correlation Engine Integration", () => {
                 (event: any) => ({
                   time: event.timestamp,
                   ms: new Date(event.timestamp).getTime(),
-                }),
+                })
               );
               const minTime = Math.min(...eventTimes.map((e: any) => e.ms));
               const maxTime = Math.max(...eventTimes.map((e: any) => e.ms));
               console.log(
-                `    Time span: ${(maxTime - minTime) / 1000}s (max allowed: ${windowMs / 1000}s)`,
+                `    Time span: ${(maxTime - minTime) / 1000}s (max allowed: ${
+                  windowMs / 1000
+                }s)`
               );
               console.log(
                 `    Events:`,
-                eventTimes.map((e: any) => e.time).join(", "),
+                eventTimes.map((e: any) => e.time).join(", ")
               );
             }
           }

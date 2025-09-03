@@ -23,13 +23,13 @@ class GraylogAdapter {
       this.authHeader = `token ${options.apiToken}`;
     } else if (options.username && options.password) {
       const credentials = Buffer.from(
-        `${options.username}:${options.password}`,
+        `${options.username}:${options.password}`
       ).toString("base64");
       this.authHeader = `Basic ${credentials}`;
     } else {
       throw new log_correlator_core_1.CorrelationError(
         "Graylog adapter requires either apiToken or username/password",
-        "AUTH_REQUIRED",
+        "AUTH_REQUIRED"
       );
     }
   }
@@ -67,7 +67,7 @@ class GraylogAdapter {
             // Filter out messages we've already seen
             if (lastMessageId) {
               const lastIndex = newMessages.findIndex(
-                (m) => m.message._id === lastMessageId,
+                (m) => m.message._id === lastMessageId
               );
               if (lastIndex >= 0) {
                 newMessages = newMessages.slice(lastIndex + 1);
@@ -83,12 +83,12 @@ class GraylogAdapter {
           console.error("Graylog polling error:", error);
           // Retry with exponential backoff
           await new Promise((resolve) =>
-            setTimeout(resolve, this.options.pollInterval * 2),
+            setTimeout(resolve, this.options.pollInterval * 2)
           );
         }
         // Wait before next poll
         await new Promise((resolve) =>
-          setTimeout(resolve, this.options.pollInterval),
+          setTimeout(resolve, this.options.pollInterval)
         );
       }
     } finally {
@@ -109,13 +109,13 @@ class GraylogAdapter {
     };
     const response = await (0, node_fetch_1.default)(
       `${url}?${queryParams}`,
-      fetchOptions,
+      fetchOptions
     );
     if (!response.ok) {
       throw new log_correlator_core_1.CorrelationError(
         `Graylog search failed: ${response.statusText}`,
         "GRAYLOG_SEARCH_ERROR",
-        { status: response.status },
+        { status: response.status }
       );
     }
     return await response.json();
@@ -233,7 +233,7 @@ class GraylogAdapter {
       if (!response.ok) {
         throw new log_correlator_core_1.CorrelationError(
           "Failed to fetch available streams",
-          "GRAYLOG_STREAMS_ERROR",
+          "GRAYLOG_STREAMS_ERROR"
         );
       }
       const data = await response.json();

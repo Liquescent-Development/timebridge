@@ -111,7 +111,7 @@ class PerformanceBenchmark {
     try {
       const correlationStart = performance.now();
       const timeoutPromise = new Promise((resolve) =>
-        setTimeout(resolve, duration),
+        setTimeout(resolve, duration)
       );
 
       const correlationPromise = (async () => {
@@ -155,10 +155,10 @@ class PerformanceBenchmark {
     console.log(`Correlations: ${metrics.correlations}`);
     console.log(`Duration: ${metrics.duration}ms`);
     console.log(
-      `Throughput: ${metrics.throughput.toFixed(2)} correlations/sec`,
+      `Throughput: ${metrics.throughput.toFixed(2)} correlations/sec`
     );
     console.log(
-      `First correlation: ${metrics.firstCorrelationTime?.toFixed(2)}ms`,
+      `First correlation: ${metrics.firstCorrelationTime?.toFixed(2)}ms`
     );
     console.log(`Average latency: ${metrics.avgLatency.toFixed(2)}ms`);
     console.log(`Peak memory: ${metrics.memoryPeakMB.toFixed(2)}MB`);
@@ -175,7 +175,7 @@ class PerformanceBenchmark {
           `${result.throughput.toFixed(1)}\t\t` +
           `${result.avgLatency.toFixed(1)}ms\t\t` +
           `${result.memoryPeakMB.toFixed(1)}MB\t\t` +
-          `${result.firstCorrelationTime?.toFixed(1)}ms`,
+          `${result.firstCorrelationTime?.toFixed(1)}ms`
       );
     }
   }
@@ -197,7 +197,7 @@ async function runBenchmarks() {
       bufferSize: 500,
       processingInterval: 50,
     },
-    testQuery,
+    testQuery
   );
 
   await benchmark.benchmark(
@@ -207,7 +207,7 @@ async function runBenchmarks() {
       bufferSize: 100,
       maxMemoryMB: 50,
     },
-    testQuery,
+    testQuery
   );
 
   benchmark.compare();
@@ -366,7 +366,7 @@ class LoadTest {
     console.log(`Total correlations: ${this.metrics.totalCorrelations}`);
     console.log(`Total time: ${this.metrics.totalTime}ms`);
     console.log(
-      `Throughput: ${this.metrics.throughput.toFixed(2)} correlations/sec`,
+      `Throughput: ${this.metrics.throughput.toFixed(2)} correlations/sec`
     );
     console.log(`Success rate: ${this.metrics.successRate.toFixed(2)}%`);
     console.log(`Errors: ${this.metrics.errors}`);
@@ -729,7 +729,7 @@ class BatchedAdapter {
 
     try {
       const results = await this.adapter.batchQuery(
-        currentBatch.map((b) => b.params),
+        currentBatch.map((b) => b.params)
       );
 
       currentBatch.forEach((item, index) => {
@@ -972,7 +972,7 @@ class ShardedEngine {
         new CorrelationEngine({
           shardId: i,
           shardCount: shardCount,
-        }),
+        })
       );
     }
   }
@@ -1001,7 +1001,7 @@ class ShardedEngine {
 
     while (pending.size > 0) {
       const promises = Array.from(pending).map((it) =>
-        it.next().then((result) => ({ iterator: it, result })),
+        it.next().then((result) => ({ iterator: it, result }))
       );
 
       const { iterator, result } = await Promise.race(promises);
@@ -1165,7 +1165,7 @@ class ElectronCorrelationService {
         } catch (error) {
           return { success: false, error: error.message };
         }
-      },
+      }
     );
 
     ipcMain.handle("stop-correlation", async (event, { id }) => {

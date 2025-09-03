@@ -1,32 +1,32 @@
 // Streaming correlation example with real-time processing
-const { CorrelationEngine } = require("@liquescent/log-correlator-core");
-const { LokiAdapter } = require("@liquescent/log-correlator-loki");
+const { TimeBridgeEngine } = require("@timebridge/core");
+const { LokiAdapter } = require("@timebridge/loki");
 
 // Mock adapter for CI testing
 class MockAdapter {
   constructor(name) {
     this.name = name;
   }
-  
+
   getName() {
     return this.name;
   }
-  
+
   validateQuery() {
     return true;
   }
-  
+
   async *createStream() {
     // Return empty stream for CI
     yield* [];
   }
-  
+
   extractJoinKeys() {
     return {};
   }
-  
+
   async destroy() {}
-  
+
   async getAvailableStreams() {
     return [];
   }
@@ -37,12 +37,12 @@ function updateTimelineChart(correlation) {
   console.log(`\n📊 Timeline Update:`);
   console.log(`   Correlation ID: ${correlation.correlationId}`);
   console.log(
-    `   Time Range: ${correlation.timeWindow.start} to ${correlation.timeWindow.end}`,
+    `   Time Range: ${correlation.timeWindow.start} to ${correlation.timeWindow.end}`
   );
 
   // Create ASCII timeline
   const events = correlation.events.sort(
-    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
   );
 
   if (events.length > 0) {
@@ -112,7 +112,7 @@ async function streamCorrelations() {
   console.log("=============================\n");
 
   // Create engine with streaming-optimized settings
-  const engine = new CorrelationEngine({
+  const engine = new TimeBridgeEngine({
     defaultTimeWindow: "1m", // 1 minute window
     maxEvents: 5000, // Lower limit for streaming
     lateTolerance: "10s", // 10 second late tolerance
@@ -133,7 +133,7 @@ async function streamCorrelations() {
         url: process.env.LOKI_URL || "http://localhost:3100",
         websocket: true,
         authToken: process.env.LOKI_TOKEN,
-      }),
+      })
     );
   }
 
@@ -182,14 +182,16 @@ async function streamCorrelations() {
       console.log(`   Events: ${correlation.events.length}`);
       console.log(`   Completeness: ${correlation.metadata.completeness}`);
       console.log(
-        `   Streams: ${correlation.metadata.matchedStreams.join(", ")}`,
+        `   Streams: ${correlation.metadata.matchedStreams.join(", ")}`
       );
 
       // Show event details
       correlation.events.forEach((event, index) => {
         const prefix = index === 0 ? "   ├─" : "   └─";
         console.log(
-          `${prefix} [${event.source}] ${event.timestamp}: ${event.message.substring(0, 50)}...`,
+          `${prefix} [${event.source}] ${
+            event.timestamp
+          }: ${event.message.substring(0, 50)}...`
         );
       });
 
@@ -237,16 +239,25 @@ async function streamCorrelations() {
   console.log(`   Duration: ${totalElapsed}s`);
   console.log(`   Total Correlations: ${totalCorrelations}`);
   console.log(
-    `   Complete: ${completeCorrelations} (${((completeCorrelations / totalCorrelations) * 100).toFixed(1)}%)`,
+    `   Complete: ${completeCorrelations} (${(
+      (completeCorrelations / totalCorrelations) *
+      100
+    ).toFixed(1)}%)`
   );
   console.log(
-    `   Partial: ${partialCorrelations} (${((partialCorrelations / totalCorrelations) * 100).toFixed(1)}%)`,
+    `   Partial: ${partialCorrelations} (${(
+      (partialCorrelations / totalCorrelations) *
+      100
+    ).toFixed(1)}%)`
   );
   console.log(
-    `   With Errors: ${errorCorrelations} (${((errorCorrelations / totalCorrelations) * 100).toFixed(1)}%)`,
+    `   With Errors: ${errorCorrelations} (${(
+      (errorCorrelations / totalCorrelations) *
+      100
+    ).toFixed(1)}%)`
   );
   console.log(
-    `   Average Rate: ${(totalCorrelations / totalElapsed).toFixed(2)}/s`,
+    `   Average Rate: ${(totalCorrelations / totalElapsed).toFixed(2)}/s`
   );
 
   // Clean up

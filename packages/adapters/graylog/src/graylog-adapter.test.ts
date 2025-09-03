@@ -1,5 +1,5 @@
 import { GraylogAdapter, GraylogAdapterOptions } from "./graylog-adapter";
-import { CorrelationError, LogEvent } from "@liquescent/log-correlator-core";
+import { CorrelationError, LogEvent } from "@timebridge/core";
 import fetch from "node-fetch";
 
 // Mock dependencies
@@ -15,7 +15,7 @@ describe("GraylogAdapter", () => {
   const startStreamAndCheckFetch = (
     adapter: GraylogAdapter,
     query: string,
-    options?: unknown,
+    options?: unknown
   ) => {
     const streamIterator = adapter.createStream(query, options);
     const iterator = streamIterator[Symbol.asyncIterator]();
@@ -67,7 +67,7 @@ describe("GraylogAdapter", () => {
 
       expect(() => new GraylogAdapter(noAuthOptions)).toThrow(CorrelationError);
       expect(() => new GraylogAdapter(noAuthOptions)).toThrow(
-        "Graylog adapter requires either apiToken or username/password",
+        "Graylog adapter requires either apiToken or username/password"
       );
     });
 
@@ -128,7 +128,7 @@ describe("GraylogAdapter", () => {
           headers: expect.objectContaining({
             Authorization: expect.stringMatching(/^Basic /),
           }),
-        }),
+        })
       );
 
       // Restore fake timers
@@ -166,7 +166,7 @@ describe("GraylogAdapter", () => {
           headers: expect.objectContaining({
             Authorization: "token test-api-token",
           }),
-        }),
+        })
       );
 
       // Restore fake timers
@@ -206,7 +206,7 @@ describe("GraylogAdapter", () => {
           headers: expect.objectContaining({
             Authorization: "Basic dGVzdHVzZXI6dGVzdHBhc3M=",
           }),
-        }),
+        })
       );
 
       // Restore fake timers
@@ -338,7 +338,7 @@ describe("GraylogAdapter", () => {
             Accept: "application/json",
             "X-Requested-By": "log-correlator",
           }),
-        }),
+        })
       );
 
       await adapter.destroy();
@@ -369,7 +369,7 @@ describe("GraylogAdapter", () => {
       // Should use 10 minute time range
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining("/api/search/universal/relative"),
-        expect.any(Object),
+        expect.any(Object)
       );
 
       await adapter.destroy();
@@ -409,7 +409,7 @@ describe("GraylogAdapter", () => {
       // Should include stream filter in query parameters
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining("filter=streams%3Acustom-stream-123"),
-        expect.any(Object),
+        expect.any(Object)
       );
 
       await adapter.destroy();
@@ -502,7 +502,7 @@ describe("GraylogAdapter", () => {
       // Should have tried at least once
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining("/api/search/universal/relative"),
-        expect.any(Object),
+        expect.any(Object)
       );
 
       await adapter.destroy();
@@ -541,7 +541,7 @@ describe("GraylogAdapter", () => {
       // Should have made at least one fetch call
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining("/api/search/universal/relative"),
-        expect.any(Object),
+        expect.any(Object)
       );
 
       await adapter.destroy();
@@ -566,13 +566,418 @@ describe("GraylogAdapter", () => {
       // Should continue polling with backoff
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining("/api/search/universal/relative"),
-        expect.any(Object),
+        expect.any(Object)
       );
 
       await adapter.destroy();
 
       // Restore fake timers
       jest.useFakeTimers();
+    });
+
+    describe("Historical vs Continuous behavior", () => {
+      it("should fetch once and complete for historical queries (default)", async () => {
+        const query = "service:frontend";
+
+        const mockResponse = {
+          ok: true,
+          json: jest.fn().mockResolvedValue({
+            messages: [
+              {
+                message: {
+                  _id: "msg1",
+                  message: "Historical event 1",
+                  timestamp: "2022-01-01T00:00:00.000Z",
+                  source: "frontend-server",
+                  fields: {
+                    service: "frontend",
+                    request_id: "req123",
+                  },
+                },
+                index: "graylog_0",
+              },
+              {
+                message: {
+                  _id: "msg2",
+                  message: "Historical event 2",
+                  timestamp: "2022-01-01T00:00:01.000Z",
+                  source: "frontend-server",
+                  fields: {
+                    service: "frontend",
+                    request_id: "req456",
+                  },
+                },
+                index: "graylog_0",
+              },
+            ],
+            total_results: 2,
+            from: "2022-01-01T00:00:00.000Z",
+            to: "2022-01-01T00:05:00.000Z",
+          }),
+        };
+
+        mockFetch.mockResolvedValue(mockResponse as any);
+
+        // Historical mode should fetch once and complete
+        const streamIterator = adapter.createStream(query, { continuous: false });
+        const results: LogEvent[] = [];
+
+        for await (const event of streamIterator) {
+          results.push(event);
+        }
+
+        expect(results).toHaveLength(2);
+        expect(results[0].message).toBe("Historical event 1");
+        expect(results[1].message).toBe("Historical event 2");
+
+        // Should only make one API call (historical mode)
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+
+        expect(mockFetch).toHaveBeenCalledWith(
+          expect.stringContaining("/api/search/universal/relative"),
+          expect.objectContaining({
+            method: "GET",
+          })
+        );
+
+        await adapter.destroy();
+      });
+
+      it("should poll continuously when continuous: true is specified", async () => {
+        // Use real timers for polling behavior
+        jest.useRealTimers();
+
+        const query = "service:frontend";
+
+        // First call returns messages, subsequent calls return empty
+        const mockResponse1 = {
+          ok: true,
+          json: jest.fn().mockResolvedValue({
+            messages: [
+              {
+                message: {
+                  _id: "msg1",
+                  message: "Live event 1",
+                  timestamp: new Date().toISOString(),
+                  source: "frontend-server",
+                  fields: {
+                    service: "frontend",
+                    request_id: "req789",
+                  },
+                },
+                index: "graylog_0",
+              },
+            ],
+            total_results: 1,
+          }),
+        };
+
+        const mockResponseEmpty = {
+          ok: true,
+          json: jest.fn().mockResolvedValue({
+            messages: [],
+            total_results: 0,
+          }),
+        };
+
+        // First call returns data, subsequent calls return empty
+        mockFetch
+          .mockResolvedValueOnce(mockResponse1 as any)
+          .mockResolvedValue(mockResponseEmpty as any);
+
+        // Continuous mode should keep polling
+        const streamIterator = adapter.createStream(query, { continuous: true });
+        const results: LogEvent[] = [];
+        const iterator = streamIterator[Symbol.asyncIterator]();
+
+        // Get first result
+        const result1 = await iterator.next();
+        if (!result1.done) {
+          results.push(result1.value);
+        }
+
+        // Wait a bit for potential second poll
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        expect(results).toHaveLength(1);
+        expect(results[0].message).toBe("Live event 1");
+
+        // Should make multiple API calls (continuous polling)
+        expect(mockFetch).toHaveBeenCalledWith(
+          expect.stringContaining("/api/search/universal/relative"),
+          expect.objectContaining({
+            method: "GET",
+          })
+        );
+
+        await adapter.destroy();
+
+        // Restore fake timers
+        jest.useFakeTimers();
+      });
+
+      it("should default to historical mode when continuous option not specified", async () => {
+        const query = "service:backend";
+
+        const mockResponse = {
+          ok: true,
+          json: jest.fn().mockResolvedValue({
+            messages: [
+              {
+                message: {
+                  _id: "msg1",
+                  message: "Default mode event",
+                  timestamp: "2022-01-01T00:00:00.000Z",
+                  source: "backend-server",
+                  fields: {
+                    service: "backend",
+                  },
+                },
+                index: "graylog_0",
+              },
+            ],
+            total_results: 1,
+          }),
+        };
+
+        mockFetch.mockResolvedValue(mockResponse as any);
+
+        // No continuous option specified - should default to historical
+        const streamIterator = adapter.createStream(query);
+        const results: LogEvent[] = [];
+
+        for await (const event of streamIterator) {
+          results.push(event);
+        }
+
+        expect(results).toHaveLength(1);
+        expect(results[0].message).toBe("Default mode event");
+
+        // Should only make one API call (historical mode default)
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+
+        await adapter.destroy();
+      });
+
+      it("should respect timeRange option in both modes", async () => {
+        // Use real timers
+        jest.useRealTimers();
+
+        const query = "service:api";
+        const timeRange = "30m";
+
+        const mockResponse = {
+          ok: true,
+          json: jest.fn().mockResolvedValue({
+            messages: [],
+            total_results: 0,
+          }),
+        };
+
+        mockFetch.mockResolvedValue(mockResponse as any);
+
+        // Test historical mode with custom time range
+        startStreamAndCheckFetch(adapter, query, { 
+          continuous: false, 
+          timeRange: timeRange 
+        });
+
+        // Wait for fetch
+        await new Promise(resolve => setTimeout(resolve, 50));
+
+        expect(mockFetch).toHaveBeenCalledWith(
+          expect.stringContaining("/api/search/universal/relative"),
+          expect.objectContaining({
+            method: "GET",
+          })
+        );
+
+        await adapter.destroy();
+
+        // Restore fake timers
+        jest.useFakeTimers();
+      });
+    });
+
+    describe("maxResults option", () => {
+      it("should respect maxResults option in adapter configuration", async () => {
+        const customMaxResults = 5000;
+        const optionsWithMaxResults = {
+          ...defaultOptions,
+          maxResults: customMaxResults,
+        };
+
+        const customAdapter = new GraylogAdapter(optionsWithMaxResults);
+        const query = "service:frontend";
+
+        const mockResponse = {
+          ok: true,
+          json: jest.fn().mockResolvedValue({
+            messages: [],
+            total_results: 0,
+          }),
+        };
+
+        mockFetch.mockResolvedValue(mockResponse as any);
+
+        // Use real timers for this test
+        jest.useRealTimers();
+
+        startStreamAndCheckFetch(customAdapter, query);
+
+        // Wait for fetch call
+        await new Promise(resolve => setTimeout(resolve, 50));
+
+        expect(mockFetch).toHaveBeenCalledWith(
+          expect.stringContaining("limit=5000"),
+          expect.any(Object)
+        );
+
+        await customAdapter.destroy();
+
+        // Restore fake timers
+        jest.useFakeTimers();
+      });
+
+      it("should use default maxResults (10000) when not specified", async () => {
+        const query = "service:backend";
+
+        const mockResponse = {
+          ok: true,
+          json: jest.fn().mockResolvedValue({
+            messages: [],
+            total_results: 0,
+          }),
+        };
+
+        mockFetch.mockResolvedValue(mockResponse as any);
+
+        // Use real timers for this test
+        jest.useRealTimers();
+
+        startStreamAndCheckFetch(adapter, query);
+
+        // Wait for fetch call
+        await new Promise(resolve => setTimeout(resolve, 50));
+
+        expect(mockFetch).toHaveBeenCalledWith(
+          expect.stringContaining("limit=10000"),
+          expect.any(Object)
+        );
+
+        await adapter.destroy();
+
+        // Restore fake timers
+        jest.useFakeTimers();
+      });
+
+      it("should apply maxResults to both historical and continuous modes", async () => {
+        const customMaxResults = 2500;
+        const optionsWithMaxResults = {
+          ...defaultOptions,
+          maxResults: customMaxResults,
+        };
+
+        const customAdapter = new GraylogAdapter(optionsWithMaxResults);
+        
+        // Use real timers for polling tests
+        jest.useRealTimers();
+
+        const query = "service:test";
+
+        const mockResponse = {
+          ok: true,
+          json: jest.fn().mockResolvedValue({
+            messages: [],
+            total_results: 0,
+          }),
+        };
+
+        mockFetch.mockResolvedValue(mockResponse as any);
+
+        // Test historical mode
+        startStreamAndCheckFetch(customAdapter, query, { continuous: false });
+        await new Promise(resolve => setTimeout(resolve, 50));
+
+        expect(mockFetch).toHaveBeenCalledWith(
+          expect.stringContaining("limit=2500"),
+          expect.any(Object)
+        );
+
+        mockFetch.mockClear();
+
+        // Test continuous mode
+        startStreamAndCheckFetch(customAdapter, query, { continuous: true });
+        await new Promise(resolve => setTimeout(resolve, 50));
+
+        expect(mockFetch).toHaveBeenCalledWith(
+          expect.stringContaining("limit=2500"),
+          expect.any(Object)
+        );
+
+        await customAdapter.destroy();
+
+        // Restore fake timers
+        jest.useFakeTimers();
+      });
+
+      it("should handle large result sets up to maxResults limit", async () => {
+        const customMaxResults = 3;
+        const optionsWithMaxResults = {
+          ...defaultOptions,
+          maxResults: customMaxResults,
+        };
+
+        const customAdapter = new GraylogAdapter(optionsWithMaxResults);
+        const query = "level:info";
+
+        // Mock response with more messages than maxResults limit
+        const mockResponse = {
+          ok: true,
+          json: jest.fn().mockResolvedValue({
+            messages: [
+              {
+                message: {
+                  _id: "msg1",
+                  message: "Info message 1",
+                  timestamp: "2022-01-01T00:00:00.000Z",
+                  source: "server1",
+                  fields: { level: "info" },
+                },
+                index: "graylog_0",
+              },
+              {
+                message: {
+                  _id: "msg2", 
+                  message: "Info message 2",
+                  timestamp: "2022-01-01T00:00:01.000Z",
+                  source: "server2",
+                  fields: { level: "info" },
+                },
+                index: "graylog_0",
+              },
+              // This would exceed our maxResults=3 if there was a third message,
+              // but Graylog should respect the limit parameter
+            ],
+            total_results: 2,
+          }),
+        };
+
+        mockFetch.mockResolvedValue(mockResponse as any);
+
+        const streamIterator = customAdapter.createStream(query);
+        const results: LogEvent[] = [];
+
+        for await (const event of streamIterator) {
+          results.push(event);
+        }
+
+        expect(results).toHaveLength(2);
+        expect(results[0].message).toBe("Info message 1");
+        expect(results[1].message).toBe("Info message 2");
+
+        await customAdapter.destroy();
+      });
     });
   });
 
@@ -598,7 +1003,7 @@ describe("GraylogAdapter", () => {
           .mockResolvedValue(
             "timestamp,source,message\n" +
               "2024-01-01T10:00:00Z,frontend,Test message 1\n" +
-              "2024-01-01T10:00:01Z,frontend,Test message 2",
+              "2024-01-01T10:00:01Z,frontend,Test message 2"
           ),
       };
 
@@ -618,7 +1023,7 @@ describe("GraylogAdapter", () => {
             Accept: "text/csv",
           }),
           body: expect.stringContaining('"query_string"'),
-        }),
+        })
       );
 
       await adapter.destroy();
@@ -686,7 +1091,7 @@ describe("GraylogAdapter", () => {
       }
 
       expect(results[0].message).toBe(
-        "Error: Failed to process, reason: timeout",
+        "Error: Failed to process, reason: timeout"
       );
 
       await adapter.destroy();
@@ -713,7 +1118,7 @@ describe("GraylogAdapter", () => {
       // Should continue polling even with empty response
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining("/api/views/search/messages"),
-        expect.any(Object),
+        expect.any(Object)
       );
 
       await adapter.destroy();
@@ -764,7 +1169,7 @@ describe("GraylogAdapter", () => {
         // Verify the converted query is used
         expect(mockFetch).toHaveBeenCalledWith(
           expect.stringContaining("query="),
-          expect.any(Object),
+          expect.any(Object)
         );
 
         mockFetch.mockClear();
@@ -944,7 +1349,7 @@ describe("GraylogAdapter", () => {
 
         expect(mockFetch).toHaveBeenCalledWith(
           expect.stringContaining("/api/search/universal/relative"),
-          expect.any(Object),
+          expect.any(Object)
         );
 
         mockFetch.mockClear();
@@ -982,7 +1387,7 @@ describe("GraylogAdapter", () => {
       // Should still make request with default time range
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining("/api/search/universal/relative"),
-        expect.any(Object),
+        expect.any(Object)
       );
 
       await adapter.destroy();
@@ -1027,7 +1432,7 @@ describe("GraylogAdapter", () => {
             Accept: "application/json",
             "X-Requested-By": "log-correlator",
           }),
-        }),
+        })
       );
     });
 
@@ -1113,7 +1518,7 @@ describe("GraylogAdapter", () => {
 
       // Start multiple streams
       const streamIterators = queries.map((query) =>
-        adapter.createStream(query),
+        adapter.createStream(query)
       );
       streamIterators.forEach((iter) => {
         const iterator = iter[Symbol.asyncIterator]();
@@ -1155,7 +1560,7 @@ describe("GraylogAdapter", () => {
 
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining("/api/search/universal/relative"),
-        expect.any(Object),
+        expect.any(Object)
       );
 
       await adapter.destroy();
@@ -1217,7 +1622,7 @@ describe("GraylogAdapter", () => {
 
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining("/api/search/universal/relative"),
-        expect.any(Object),
+        expect.any(Object)
       );
 
       await adapter.destroy();
@@ -1237,7 +1642,7 @@ describe("GraylogAdapter", () => {
 
       // Mock a hanging request
       mockFetch.mockImplementation(
-        () => new Promise(() => {}), // Never resolves
+        () => new Promise(() => {}) // Never resolves
       );
 
       startStreamAndCheckFetch(adapter, query);
@@ -1248,7 +1653,7 @@ describe("GraylogAdapter", () => {
       // Should handle timeout gracefully
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining("/api/search/universal/relative"),
-        expect.any(Object),
+        expect.any(Object)
       );
 
       await adapter.destroy();
@@ -1288,6 +1693,536 @@ describe("GraylogAdapter", () => {
       expect(result.value?.stream).toBe("unknown");
 
       await adapter.destroy();
+    });
+  });
+
+  describe("parseGraylogMessage", () => {
+    let adapter: GraylogAdapter;
+
+    beforeEach(() => {
+      adapter = new GraylogAdapter(defaultOptions);
+    });
+
+    describe("Field structure handling", () => {
+      it("should parse messages with fields in message.fields structure", () => {
+        const graylogMessage = {
+          _id: "msg123",
+          message: "Test message",
+          timestamp: "2022-01-01T00:00:00.000Z",
+          source: "test-server",
+          fields: {
+            service: "frontend",
+            level: "info",
+            request_id: "req123",
+            trace_id: "trace456",
+            user_id: "user789",
+            response_time: 250,
+            is_error: false,
+            status: "success"
+          }
+        };
+
+        const result = (adapter as any).parseGraylogMessage(graylogMessage);
+
+        expect(result).toEqual({
+          timestamp: "2022-01-01T00:00:00.000Z",
+          source: "graylog",
+          stream: "test-server",
+          message: "Test message",
+          labels: {
+            service: "frontend",
+            level: "info",
+            request_id: "req123",
+            trace_id: "trace456",
+            user_id: "user789",
+            response_time: "250",
+            is_error: "false",
+            status: "success"
+          },
+          joinKeys: {
+            request_id: "req123",
+            trace_id: "trace456",
+            user_id: "user789"
+          }
+        });
+      });
+
+      it("should parse messages with fields directly on message object", () => {
+        const graylogMessage = {
+          _id: "msg123",
+          message: "Test message",
+          timestamp: "2022-01-01T00:00:00.000Z",
+          source: "test-server",
+          // Fields directly on message object (no nested fields property)
+          service: "backend",
+          level: "warn",
+          correlation_id: "corr123",
+          session_id: "sess456",
+          duration: 1500,
+          completed: true,
+          priority: "high"
+        };
+
+        const result = (adapter as any).parseGraylogMessage(graylogMessage);
+
+        expect(result).toEqual({
+          timestamp: "2022-01-01T00:00:00.000Z",
+          source: "graylog",
+          stream: "test-server",
+          message: "Test message",
+          labels: {
+            service: "backend",
+            level: "warn",
+            correlation_id: "corr123",
+            session_id: "sess456",
+            duration: "1500",
+            completed: "true",
+            priority: "high"
+          },
+          joinKeys: {
+            correlation_id: "corr123",
+            session_id: "sess456"
+          }
+        });
+      });
+
+      it("should handle message with both fields property and direct fields", () => {
+        const graylogMessage = {
+          _id: "msg123",
+          message: "Test message",
+          timestamp: "2022-01-01T00:00:00.000Z",
+          source: "test-server",
+          fields: {
+            service: "api",
+            request_id: "req123"
+          },
+          // Direct fields that should be ignored when fields property exists
+          level: "error",
+          trace_id: "trace456"
+        };
+
+        const result = (adapter as any).parseGraylogMessage(graylogMessage);
+
+        // Should use fields property, not direct fields
+        expect(result.labels).toEqual({
+          service: "api",
+          request_id: "req123"
+        });
+        expect(result.joinKeys).toEqual({
+          request_id: "req123"
+        });
+      });
+    });
+
+    describe("System fields filtering", () => {
+      it("should filter out system fields from message.fields", () => {
+        const graylogMessage = {
+          _id: "msg123",
+          message: "Test message",
+          timestamp: "2022-01-01T00:00:00.000Z",
+          source: "test-server",
+          fields: {
+            service: "frontend",
+            level: "info",
+            _id: "internal123",
+            gl2_message_id: "gl2_123",
+            streams: ["stream1", "stream2"],
+            decoration_stats: { count: 5 },
+            message: "duplicate message",
+            timestamp: "duplicate timestamp",
+            source: "duplicate source",
+            fields: "duplicate fields"
+          }
+        };
+
+        const result = (adapter as any).parseGraylogMessage(graylogMessage);
+
+        // Only service and level should be in labels, system fields filtered out
+        expect(result.labels).toEqual({
+          service: "frontend",
+          level: "info"
+        });
+        expect(result.joinKeys).toEqual({});
+      });
+
+      it("should filter out system fields from direct message properties", () => {
+        const graylogMessage = {
+          _id: "msg123",
+          message: "Test message",
+          timestamp: "2022-01-01T00:00:00.000Z",
+          source: "test-server",
+          service: "backend",
+          level: "error",
+          gl2_message_id: "gl2_456",
+          streams: ["stream3"],
+          decoration_stats: { processed: true }
+        };
+
+        const result = (adapter as any).parseGraylogMessage(graylogMessage);
+
+        // Only service and level should be in labels
+        expect(result.labels).toEqual({
+          service: "backend",
+          level: "error"
+        });
+      });
+    });
+
+    describe("Join key identification", () => {
+      it("should identify join keys from fields ending with _id", () => {
+        const graylogMessage = {
+          _id: "msg123",
+          message: "Test message",
+          timestamp: "2022-01-01T00:00:00.000Z",
+          source: "test-server",
+          fields: {
+            user_id: "user123",
+            session_id: "sess456",
+            transaction_id: "txn789",
+            request_id: "req999",
+            random_field: "not_a_key"
+          }
+        };
+
+        const result = (adapter as any).parseGraylogMessage(graylogMessage);
+
+        expect(result.joinKeys).toEqual({
+          user_id: "user123",
+          session_id: "sess456",
+          transaction_id: "txn789",
+          request_id: "req999"
+        });
+      });
+
+      it("should identify join keys containing correlation", () => {
+        const graylogMessage = {
+          _id: "msg123",
+          message: "Test message",
+          timestamp: "2022-01-01T00:00:00.000Z",
+          source: "test-server",
+          fields: {
+            correlation_id: "corr123",
+            correlation_token: "token456",
+            request_correlation: "reqcorr789",
+            correlation: "simple_corr",
+            unrelated_field: "not_correlated"
+          }
+        };
+
+        const result = (adapter as any).parseGraylogMessage(graylogMessage);
+
+        expect(result.joinKeys).toEqual({
+          correlation_id: "corr123",
+          correlation_token: "token456",
+          request_correlation: "reqcorr789",
+          correlation: "simple_corr"
+        });
+      });
+
+      it("should identify join keys containing trace", () => {
+        const graylogMessage = {
+          _id: "msg123",
+          message: "Test message",
+          timestamp: "2022-01-01T00:00:00.000Z",
+          source: "test-server",
+          fields: {
+            trace_id: "trace123",
+            trace_span: "span456",
+            distributed_trace: "dtrace789",
+            trace: "simple_trace",
+            other_field: "no_trace_here"
+          }
+        };
+
+        const result = (adapter as any).parseGraylogMessage(graylogMessage);
+
+        expect(result.joinKeys).toEqual({
+          trace_id: "trace123",
+          trace_span: "span456",
+          distributed_trace: "dtrace789",
+          trace: "simple_trace"
+        });
+      });
+
+      it("should identify join keys containing request_id", () => {
+        const graylogMessage = {
+          _id: "msg123",
+          message: "Test message",
+          timestamp: "2022-01-01T00:00:00.000Z",
+          source: "test-server",
+          fields: {
+            request_id: "req123",
+            http_request_id: "http_req456",
+            parent_request_id: "parent789",
+            other_field: "no_request_here"
+          }
+        };
+
+        const result = (adapter as any).parseGraylogMessage(graylogMessage);
+
+        expect(result.joinKeys).toEqual({
+          request_id: "req123",
+          http_request_id: "http_req456",
+          parent_request_id: "parent789"
+        });
+      });
+
+      it("should combine multiple join key identification patterns", () => {
+        const graylogMessage = {
+          _id: "msg123",
+          message: "Test message",
+          timestamp: "2022-01-01T00:00:00.000Z",
+          source: "test-server",
+          fields: {
+            user_id: "user123",
+            correlation_token: "corr456",
+            trace_span: "trace789",
+            parent_request_id: "req999",
+            normal_field: "not_a_join_key"
+          }
+        };
+
+        const result = (adapter as any).parseGraylogMessage(graylogMessage);
+
+        expect(result.joinKeys).toEqual({
+          user_id: "user123",
+          correlation_token: "corr456",
+          trace_span: "trace789",
+          parent_request_id: "req999"
+        });
+      });
+    });
+
+    describe("Field type conversion", () => {
+      it("should convert string fields to string labels", () => {
+        const graylogMessage = {
+          _id: "msg123",
+          message: "Test message",
+          timestamp: "2022-01-01T00:00:00.000Z",
+          source: "test-server",
+          fields: {
+            service: "frontend",
+            level: "info",
+            status: "success"
+          }
+        };
+
+        const result = (adapter as any).parseGraylogMessage(graylogMessage);
+
+        expect(result.labels).toEqual({
+          service: "frontend",
+          level: "info",
+          status: "success"
+        });
+      });
+
+      it("should convert number fields to string labels", () => {
+        const graylogMessage = {
+          _id: "msg123",
+          message: "Test message",
+          timestamp: "2022-01-01T00:00:00.000Z",
+          source: "test-server",
+          fields: {
+            response_time: 250,
+            status_code: 200,
+            retry_count: 0,
+            temperature: 98.6,
+            user_id: 12345
+          }
+        };
+
+        const result = (adapter as any).parseGraylogMessage(graylogMessage);
+
+        expect(result.labels).toEqual({
+          response_time: "250",
+          status_code: "200",
+          retry_count: "0",
+          temperature: "98.6",
+          user_id: "12345"
+        });
+
+        // user_id should also be a join key
+        expect(result.joinKeys).toEqual({
+          user_id: "12345"
+        });
+      });
+
+      it("should convert boolean fields to string labels", () => {
+        const graylogMessage = {
+          _id: "msg123",
+          message: "Test message",
+          timestamp: "2022-01-01T00:00:00.000Z",
+          source: "test-server",
+          fields: {
+            is_error: true,
+            completed: false,
+            authenticated: true,
+            cache_hit: false
+          }
+        };
+
+        const result = (adapter as any).parseGraylogMessage(graylogMessage);
+
+        expect(result.labels).toEqual({
+          is_error: "true",
+          completed: "false",
+          authenticated: "true",
+          cache_hit: "false"
+        });
+      });
+
+      it("should skip non-primitive field types", () => {
+        const graylogMessage = {
+          _id: "msg123",
+          message: "Test message",
+          timestamp: "2022-01-01T00:00:00.000Z",
+          source: "test-server",
+          fields: {
+            service: "frontend", // string - should be included
+            count: 42, // number - should be included
+            enabled: true, // boolean - should be included
+            metadata: { key: "value" }, // object - should be skipped
+            tags: ["tag1", "tag2"], // array - should be skipped
+            nullable_field: null, // null - should be skipped
+            undefined_field: undefined // undefined - should be skipped
+          }
+        };
+
+        const result = (adapter as any).parseGraylogMessage(graylogMessage);
+
+        expect(result.labels).toEqual({
+          service: "frontend",
+          count: "42",
+          enabled: "true"
+        });
+      });
+    });
+
+    describe("Edge cases", () => {
+      it("should handle message with no fields property and no direct fields", () => {
+        const graylogMessage = {
+          _id: "msg123",
+          message: "Test message",
+          timestamp: "2022-01-01T00:00:00.000Z",
+          source: "test-server"
+        };
+
+        const result = (adapter as any).parseGraylogMessage(graylogMessage);
+
+        expect(result.labels).toEqual({});
+        expect(result.joinKeys).toEqual({});
+      });
+
+      it("should handle message with empty fields object", () => {
+        const graylogMessage = {
+          _id: "msg123",
+          message: "Test message",
+          timestamp: "2022-01-01T00:00:00.000Z",
+          source: "test-server",
+          fields: {}
+        };
+
+        const result = (adapter as any).parseGraylogMessage(graylogMessage);
+
+        expect(result.labels).toEqual({});
+        expect(result.joinKeys).toEqual({});
+      });
+
+      it("should handle message with missing timestamp", () => {
+        const graylogMessage = {
+          _id: "msg123",
+          message: "Test message",
+          source: "test-server",
+          fields: {
+            service: "frontend"
+          }
+        };
+
+        const result = (adapter as any).parseGraylogMessage(graylogMessage);
+
+        expect(result.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z$/);
+        expect(result.labels).toEqual({
+          service: "frontend"
+        });
+      });
+
+      it("should handle message with missing source", () => {
+        const graylogMessage = {
+          _id: "msg123",
+          message: "Test message",
+          timestamp: "2022-01-01T00:00:00.000Z",
+          fields: {
+            service: "frontend"
+          }
+        };
+
+        const result = (adapter as any).parseGraylogMessage(graylogMessage);
+
+        expect(result.stream).toBe("unknown");
+      });
+
+      it("should handle message with missing message content", () => {
+        const graylogMessage = {
+          _id: "msg123",
+          timestamp: "2022-01-01T00:00:00.000Z",
+          source: "test-server",
+          fields: {
+            service: "frontend"
+          }
+        };
+
+        const result = (adapter as any).parseGraylogMessage(graylogMessage);
+
+        expect(result.message).toBe("");
+      });
+
+      it("should handle fields with empty string values", () => {
+        const graylogMessage = {
+          _id: "msg123",
+          message: "Test message",
+          timestamp: "2022-01-01T00:00:00.000Z",
+          source: "test-server",
+          fields: {
+            service: "",
+            level: "info",
+            empty_id: "",
+            request_id: "req123"
+          }
+        };
+
+        const result = (adapter as any).parseGraylogMessage(graylogMessage);
+
+        expect(result.labels).toEqual({
+          service: "",
+          level: "info",
+          empty_id: "",
+          request_id: "req123"
+        });
+
+        expect(result.joinKeys).toEqual({
+          empty_id: "",
+          request_id: "req123"
+        });
+      });
+
+      it("should extract join keys from message content when fields are missing", () => {
+        const graylogMessage = {
+          _id: "msg123",
+          message: "Processing request_id=abc123 with trace-id def456 for correlation_id ghi789",
+          timestamp: "2022-01-01T00:00:00.000Z",
+          source: "test-server",
+          fields: {}
+        };
+
+        const result = (adapter as any).parseGraylogMessage(graylogMessage);
+
+        // Should extract from message content
+        expect(result.joinKeys).toMatchObject({
+          request_id: "abc123",
+          trace_id: "def456",
+          correlation_id: "ghi789"
+        });
+      });
     });
   });
 });

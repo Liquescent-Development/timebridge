@@ -1,5 +1,5 @@
 {
-  "name": "log-correlator",
+  "name": "timebridge",
   "private": true,
   "workspaces": [
     "packages/*",
@@ -20,7 +20,7 @@
     "publish:all": "npm run publish:query-parser && npm run publish:core && npm run publish:adapters",
     "publish:query-parser": "npm publish packages/query-parser --access public",
     "publish:core": "npm publish packages/core --access public",
-    "publish:adapters": "npm publish packages/adapters/loki --access public && npm publish packages/adapters/graylog --access public && npm publish packages/adapters/promql --access public",
+    "publish:adapters": "npm publish packages/adapters/loki --access public && npm publish packages/adapters/graylog --access public && npm publish packages/adapters/prometheus --access public && npm publish packages/adapters/influxdb --access public",
     "publish:dry-run": "npm publish --dry-run --workspaces",
     "version:patch": "node scripts/bump-version.js patch",
     "version:minor": "node scripts/bump-version.js minor",
@@ -40,5 +40,11 @@
   },
   "engines": {
     "node": ">=16.0.0"
+  },
+  "dependencies": {
+    "bloom-filters": "^3.0.4",
+    "duckdb": "^1.3.2",
+    "pino": "^9.9.1",
+    "pino-pretty": "^13.1.1"
   }
 }

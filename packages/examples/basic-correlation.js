@@ -1,33 +1,33 @@
 // Basic correlation example - vanilla JavaScript
-const { CorrelationEngine } = require("@liquescent/log-correlator-core");
-const { LokiAdapter } = require("@liquescent/log-correlator-loki");
-const { GraylogAdapter } = require("@liquescent/log-correlator-graylog");
+const { TimeBridgeEngine } = require("@timebridge/core");
+const { LokiAdapter } = require("@timebridge/loki");
+const { GraylogAdapter } = require("@timebridge/graylog");
 
 // Mock adapter for CI testing
 class MockAdapter {
   constructor(name) {
     this.name = name;
   }
-  
+
   getName() {
     return this.name;
   }
-  
+
   validateQuery() {
     return true;
   }
-  
+
   async *createStream() {
     // Return empty stream for CI
     yield* [];
   }
-  
+
   extractJoinKeys() {
     return {};
   }
-  
+
   async destroy() {}
-  
+
   async getAvailableStreams() {
     return [];
   }
@@ -35,7 +35,7 @@ class MockAdapter {
 
 async function main() {
   // Create correlation engine with simple configuration
-  const engine = new CorrelationEngine({
+  const engine = new TimeBridgeEngine({
     timeWindow: 30000, // 30 second window
     maxEvents: 10000, // Memory limit
     lateTolerance: 5000, // 5 second late arrival tolerance
@@ -54,7 +54,7 @@ async function main() {
         url: "http://localhost:3100",
         websocket: false, // Use polling for this example
         pollInterval: 1000,
-      }),
+      })
     );
 
     // Add Graylog adapter
@@ -66,7 +66,7 @@ async function main() {
         password: "admin",
         pollInterval: 2000,
         // apiVersion: "v6", // Use for Graylog 6.x+ (requires API token, returns CSV)
-      }),
+      })
     );
   }
 
@@ -95,7 +95,7 @@ async function main() {
 
       correlation.events.forEach((event) => {
         console.log(
-          `    [${event.source}] ${event.timestamp}: ${event.message}`,
+          `    [${event.source}] ${event.timestamp}: ${event.message}`
         );
       });
       console.log("");
@@ -120,7 +120,7 @@ async function main() {
       console.log(`  Join key: ${correlation.joinKey}`);
       console.log(`  Join value: ${correlation.joinValue}`);
       console.log(
-        `  Sources: ${correlation.metadata.matchedStreams.join(", ")}`,
+        `  Sources: ${correlation.metadata.matchedStreams.join(", ")}`
       );
       console.log("");
     }

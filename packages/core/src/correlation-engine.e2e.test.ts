@@ -1,4 +1,4 @@
-import { CorrelationEngine } from "./correlation-engine";
+import { TimeBridgeEngine } from "./correlation-engine";
 import {
   DataSourceAdapter,
   LogEvent,
@@ -14,14 +14,14 @@ class MockLokiAdapter implements DataSourceAdapter {
 
   async *createStream(
     selector: string,
-    _options?: StreamOptions,
+    _options?: StreamOptions
   ): AsyncIterable<LogEvent> {
     // Simulate realistic delay
     await new Promise((resolve) => setTimeout(resolve, 10));
 
     const filters = this.parseSelector(selector);
     const filteredEvents = this.events.filter((event) =>
-      this.matchesFilters(event, filters),
+      this.matchesFilters(event, filters)
     );
 
     for (const event of filteredEvents) {
@@ -44,10 +44,10 @@ class MockLokiAdapter implements DataSourceAdapter {
 
   private matchesFilters(
     event: LogEvent,
-    filters: Record<string, string>,
+    filters: Record<string, string>
   ): boolean {
     return Object.entries(filters).every(
-      ([key, value]) => event.labels[key] === value,
+      ([key, value]) => event.labels[key] === value
     );
   }
 
@@ -68,7 +68,7 @@ class MockGraylogAdapter implements DataSourceAdapter {
 
   async *createStream(
     query: string,
-    _options?: StreamOptions,
+    _options?: StreamOptions
   ): AsyncIterable<LogEvent> {
     await new Promise((resolve) => setTimeout(resolve, 15));
 
@@ -104,7 +104,7 @@ class MockPromQLAdapter implements DataSourceAdapter {
 
   async *createStream(
     query: string,
-    _options?: StreamOptions,
+    _options?: StreamOptions
   ): AsyncIterable<LogEvent> {
     await new Promise((resolve) => setTimeout(resolve, 20));
 
@@ -130,11 +130,11 @@ class MockPromQLAdapter implements DataSourceAdapter {
 }
 
 describe("Log Correlator End-to-End Tests", () => {
-  let engine: CorrelationEngine;
+  let engine: TimeBridgeEngine;
   const testTimeout = 30000;
 
   beforeEach(() => {
-    engine = new CorrelationEngine({
+    engine = new TimeBridgeEngine({
       timeWindow: 10000, // 10 seconds
       maxEvents: 1000,
       lateTolerance: 2000,
@@ -218,7 +218,7 @@ describe("Log Correlator End-to-End Tests", () => {
           expect(result.events.length).toBeGreaterThanOrEqual(2);
         });
       },
-      testTimeout,
+      testTimeout
     );
 
     it(
@@ -264,7 +264,7 @@ describe("Log Correlator End-to-End Tests", () => {
         expect(results[0].joinValue).toBe("abc123");
         expect(results[0].events).toHaveLength(2);
       },
-      testTimeout,
+      testTimeout
     );
 
     it(
@@ -317,7 +317,7 @@ describe("Log Correlator End-to-End Tests", () => {
           "req3",
         ]);
       },
-      testTimeout,
+      testTimeout
     );
 
     it(
@@ -382,7 +382,7 @@ describe("Log Correlator End-to-End Tests", () => {
           "req3",
         ]);
       },
-      testTimeout,
+      testTimeout
     );
   });
 
@@ -440,7 +440,7 @@ describe("Log Correlator End-to-End Tests", () => {
 
         engine.addAdapter(
           "loki",
-          new MockLokiAdapter([...frontendLogs, ...dbLogs]),
+          new MockLokiAdapter([...frontendLogs, ...dbLogs])
         );
         engine.addAdapter("graylog", new MockGraylogAdapter(authLogs));
 
@@ -467,7 +467,7 @@ describe("Log Correlator End-to-End Tests", () => {
           "loki",
         ]);
       },
-      testTimeout,
+      testTimeout
     );
 
     it(
@@ -537,10 +537,10 @@ describe("Log Correlator End-to-End Tests", () => {
         expect(results[0].events.some((e) => e.source === "loki")).toBe(true);
         expect(results[0].events.some((e) => e.source === "promql")).toBe(true);
         expect(results[0].events.some((e) => e.source === "graylog")).toBe(
-          true,
+          true
         );
       },
-      testTimeout,
+      testTimeout
     );
 
     it(
@@ -606,11 +606,11 @@ describe("Log Correlator End-to-End Tests", () => {
           expect(result.events.some((e) => e.source === "loki")).toBe(true);
           expect(result.events.some((e) => e.source === "promql")).toBe(true);
           expect(
-            result.events.some((e) => e.labels.endpoint === "/users"),
+            result.events.some((e) => e.labels.endpoint === "/users")
           ).toBe(true);
         });
       },
-      testTimeout,
+      testTimeout
     );
   });
 
@@ -637,7 +637,7 @@ describe("Log Correlator End-to-End Tests", () => {
           }).rejects.toThrow();
         }
       },
-      testTimeout,
+      testTimeout
     );
 
     it(
@@ -674,7 +674,7 @@ describe("Log Correlator End-to-End Tests", () => {
 
         expect(results).toHaveLength(0);
       },
-      testTimeout,
+      testTimeout
     );
 
     it(
@@ -720,7 +720,7 @@ describe("Log Correlator End-to-End Tests", () => {
         expect(correlationCount).toBeGreaterThan(0);
         expect(duration).toBeLessThan(5000); // Should complete within 5 seconds
       },
-      testTimeout,
+      testTimeout
     );
 
     it(
@@ -772,7 +772,7 @@ describe("Log Correlator End-to-End Tests", () => {
         expect(results).toHaveLength(1);
         expect(results[0].events).toHaveLength(2);
       },
-      testTimeout,
+      testTimeout
     );
 
     it(
@@ -788,7 +788,7 @@ describe("Log Correlator End-to-End Tests", () => {
           }
         }).rejects.toThrow("Required data source adapter not found");
       },
-      testTimeout,
+      testTimeout
     );
   });
 
@@ -825,7 +825,7 @@ describe("Log Correlator End-to-End Tests", () => {
         engine.addAdapter("loki", new MockLokiAdapter([complexEvents[0]]));
         engine.addAdapter(
           "graylog",
-          new MockGraylogAdapter([complexEvents[1]]),
+          new MockGraylogAdapter([complexEvents[1]])
         );
 
         // Complex query with multiple modifiers
@@ -850,7 +850,7 @@ describe("Log Correlator End-to-End Tests", () => {
         expect(results[0].events[0].source).toBe("graylog");
         expect(results[0].events[0].labels.status).toBe("success");
       },
-      testTimeout,
+      testTimeout
     );
 
     it(
@@ -910,7 +910,7 @@ describe("Log Correlator End-to-End Tests", () => {
           expect(result.events.length).toBeGreaterThanOrEqual(2);
         });
       },
-      testTimeout,
+      testTimeout
     );
 
     it(
@@ -929,7 +929,7 @@ describe("Log Correlator End-to-End Tests", () => {
         engine.addAdapter("loki", new MockLokiAdapter(testEvents));
         engine.addAdapter(
           "graylog",
-          new MockGraylogAdapter(testEvents.slice(0, 25)),
+          new MockGraylogAdapter(testEvents.slice(0, 25))
         );
 
         let metricsReceived = false;
@@ -956,7 +956,7 @@ describe("Log Correlator End-to-End Tests", () => {
         await metricsPromise;
         expect(metricsReceived).toBe(true);
       },
-      testTimeout,
+      testTimeout
     );
   });
 });

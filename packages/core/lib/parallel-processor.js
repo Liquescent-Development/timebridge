@@ -81,8 +81,8 @@ class ParallelProcessor extends eventemitter3_1.EventEmitter {
           keyChunk,
           leftEvents,
           rightEvents,
-          joinKeys,
-        ),
+          joinKeys
+        )
       );
     }
     const results = await Promise.all(tasks);
@@ -95,7 +95,7 @@ class ParallelProcessor extends eventemitter3_1.EventEmitter {
     for (let i = 0; i < chunk.length; i += batchSize) {
       const batch = chunk.slice(i, i + batchSize);
       const batchResults = await Promise.all(
-        batch.map((item) => processor(item)),
+        batch.map((item) => processor(item))
       );
       results.push(...batchResults);
     }

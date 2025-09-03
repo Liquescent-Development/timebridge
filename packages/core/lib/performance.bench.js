@@ -76,7 +76,7 @@ class PerformanceBenchmark {
       const events = this.generateEvents(
         eventCount,
         sourceName,
-        new Date(baseTime.getTime() + s * 50),
+        new Date(baseTime.getTime() + s * 50)
       ); // Slight offset per source
       sources.set(sourceName, events);
     }
@@ -159,7 +159,7 @@ class PerformanceBenchmark {
         `${joinType.toUpperCase()} Join - ${eventCount} events`,
         engine,
         query,
-        adapters,
+        adapters
       );
       this.results.push(result);
       this.printResult(result);
@@ -187,7 +187,7 @@ class PerformanceBenchmark {
         `Inner Join - ${eventCount} events per source`,
         engine,
         query,
-        adapters,
+        adapters
       );
       this.results.push(result);
       this.printResult(result);
@@ -216,7 +216,7 @@ class PerformanceBenchmark {
         `Time Window ${timeWindow} - ${eventCount} events`,
         engine,
         query,
-        adapters,
+        adapters
       );
       this.results.push(result);
       this.printResult(result);
@@ -249,7 +249,7 @@ class PerformanceBenchmark {
         `Multi-stream (${streamCount} streams) - ${eventCount} events each`,
         engine,
         query,
-        adapters,
+        adapters
       );
       this.results.push(result);
       this.printResult(result);
@@ -283,7 +283,7 @@ class PerformanceBenchmark {
         `${scenario.name} - ${scenario.eventCount} events`,
         engine,
         query,
-        adapters,
+        adapters
       );
       this.results.push(result);
       this.printResult(result);
@@ -308,7 +308,7 @@ class PerformanceBenchmark {
       const source2Events = this.generateEvents(
         eventCount,
         "source_1",
-        new Date(Date.now() + tolerance + 1000),
+        new Date(Date.now() + tolerance + 1000)
       ); // Make some events late
       const adapters = new Map([
         ["source_0", new MockAdapter("source_0", source1Events)],
@@ -319,7 +319,7 @@ class PerformanceBenchmark {
         `Late Tolerance ${tolerance}ms - ${eventCount} events`,
         engine,
         query,
-        adapters,
+        adapters
       );
       this.results.push(result);
       this.printResult(result);
@@ -349,7 +349,7 @@ class PerformanceBenchmark {
       `Stress Test - ${eventCount} events × 3 sources`,
       engine,
       query,
-      adapters,
+      adapters
     );
     this.results.push(result);
     this.printResult(result);
@@ -361,21 +361,25 @@ class PerformanceBenchmark {
     console.log(`\n${result.name}:`);
     console.log(`  Duration: ${result.duration.toFixed(2)}ms`);
     console.log(
-      `  Events Processed: ${result.eventsProcessed.toLocaleString()}`,
+      `  Events Processed: ${result.eventsProcessed.toLocaleString()}`
     );
     console.log(
-      `  Correlations Found: ${result.correlationsFound.toLocaleString()}`,
+      `  Correlations Found: ${result.correlationsFound.toLocaleString()}`
     );
     console.log(`  Throughput: ${result.throughput.toFixed(2)} events/sec`);
     console.log(`  Memory Usage:`);
     console.log(
-      `    Heap Used: ${(result.memoryUsage.heapUsed / 1024 / 1024).toFixed(2)} MB`,
+      `    Heap Used: ${(result.memoryUsage.heapUsed / 1024 / 1024).toFixed(
+        2
+      )} MB`
     );
     console.log(
-      `    Heap Total: ${(result.memoryUsage.heapTotal / 1024 / 1024).toFixed(2)} MB`,
+      `    Heap Total: ${(result.memoryUsage.heapTotal / 1024 / 1024).toFixed(
+        2
+      )} MB`
     );
     console.log(
-      `    RSS: ${(result.memoryUsage.rss / 1024 / 1024).toFixed(2)} MB`,
+      `    RSS: ${(result.memoryUsage.rss / 1024 / 1024).toFixed(2)} MB`
     );
   }
   /**
@@ -391,45 +395,57 @@ class PerformanceBenchmark {
     const throughputs = this.results.map((r) => r.throughput);
     const durations = this.results.map((r) => r.duration);
     const memoryUsages = this.results.map(
-      (r) => r.memoryUsage.heapUsed / 1024 / 1024,
+      (r) => r.memoryUsage.heapUsed / 1024 / 1024
     );
     console.log("\nPerformance Statistics:");
     console.log(
-      `  Average Throughput: ${(throughputs.reduce((a, b) => a + b, 0) / throughputs.length).toFixed(2)} events/sec`,
+      `  Average Throughput: ${(
+        throughputs.reduce((a, b) => a + b, 0) / throughputs.length
+      ).toFixed(2)} events/sec`
     );
     console.log(
-      `  Max Throughput: ${Math.max(...throughputs).toFixed(2)} events/sec`,
+      `  Max Throughput: ${Math.max(...throughputs).toFixed(2)} events/sec`
     );
     console.log(
-      `  Min Throughput: ${Math.min(...throughputs).toFixed(2)} events/sec`,
+      `  Min Throughput: ${Math.min(...throughputs).toFixed(2)} events/sec`
     );
     console.log(
-      `\n  Average Duration: ${(durations.reduce((a, b) => a + b, 0) / durations.length).toFixed(2)}ms`,
+      `\n  Average Duration: ${(
+        durations.reduce((a, b) => a + b, 0) / durations.length
+      ).toFixed(2)}ms`
     );
     console.log(`  Max Duration: ${Math.max(...durations).toFixed(2)}ms`);
     console.log(`  Min Duration: ${Math.min(...durations).toFixed(2)}ms`);
     console.log(
-      `\n  Average Memory Usage: ${(memoryUsages.reduce((a, b) => a + b, 0) / memoryUsages.length).toFixed(2)} MB`,
+      `\n  Average Memory Usage: ${(
+        memoryUsages.reduce((a, b) => a + b, 0) / memoryUsages.length
+      ).toFixed(2)} MB`
     );
     console.log(
-      `  Max Memory Usage: ${Math.max(...memoryUsages).toFixed(2)} MB`,
+      `  Max Memory Usage: ${Math.max(...memoryUsages).toFixed(2)} MB`
     );
     console.log(
-      `  Min Memory Usage: ${Math.min(...memoryUsages).toFixed(2)} MB`,
+      `  Min Memory Usage: ${Math.min(...memoryUsages).toFixed(2)} MB`
     );
     // Top performers
     const topThroughput = this.results.reduce((max, result) =>
-      result.throughput > max.throughput ? result : max,
+      result.throughput > max.throughput ? result : max
     );
     const lowestMemory = this.results.reduce((min, result) =>
-      result.memoryUsage.heapUsed < min.memoryUsage.heapUsed ? result : min,
+      result.memoryUsage.heapUsed < min.memoryUsage.heapUsed ? result : min
     );
     console.log("\nTop Performers:");
     console.log(
-      `  Highest Throughput: ${topThroughput.name} (${topThroughput.throughput.toFixed(2)} events/sec)`,
+      `  Highest Throughput: ${
+        topThroughput.name
+      } (${topThroughput.throughput.toFixed(2)} events/sec)`
     );
     console.log(
-      `  Lowest Memory Usage: ${lowestMemory.name} (${(lowestMemory.memoryUsage.heapUsed / 1024 / 1024).toFixed(2)} MB)`,
+      `  Lowest Memory Usage: ${lowestMemory.name} (${(
+        lowestMemory.memoryUsage.heapUsed /
+        1024 /
+        1024
+      ).toFixed(2)} MB)`
     );
     // Recommendations
     console.log("\nRecommendations:");
@@ -437,20 +453,24 @@ class PerformanceBenchmark {
       throughputs.reduce((a, b) => a + b, 0) / throughputs.length;
     if (avgThroughput < 1000) {
       console.log(
-        `  - Consider optimizing correlation algorithms (current avg: ${avgThroughput.toFixed(2)} events/sec)`,
+        `  - Consider optimizing correlation algorithms (current avg: ${avgThroughput.toFixed(
+          2
+        )} events/sec)`
       );
     }
     const avgMemory =
       memoryUsages.reduce((a, b) => a + b, 0) / memoryUsages.length;
     if (avgMemory > 100) {
       console.log(
-        `  - Consider reducing buffer sizes or implementing memory optimization (current avg: ${avgMemory.toFixed(2)} MB)`,
+        `  - Consider reducing buffer sizes or implementing memory optimization (current avg: ${avgMemory.toFixed(
+          2
+        )} MB)`
       );
     }
     const highDurationResults = this.results.filter((r) => r.duration > 1000);
     if (highDurationResults.length > 0) {
       console.log(
-        `  - ${highDurationResults.length} tests took over 1 second - consider performance optimization`,
+        `  - ${highDurationResults.length} tests took over 1 second - consider performance optimization`
       );
     }
   }

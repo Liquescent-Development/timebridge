@@ -55,7 +55,7 @@ class CorrelationEngine extends eventemitter3_1.EventEmitter {
     this.queryParser = new log_correlator_query_parser_1.PeggyQueryParser();
     // Initialize performance monitor
     this.performanceMonitor = new performance_monitor_1.PerformanceMonitor(
-      5000,
+      5000
     );
     this.performanceMonitor.start();
     // Set up performance monitoring events
@@ -81,7 +81,7 @@ class CorrelationEngine extends eventemitter3_1.EventEmitter {
     if (this.adapters.has(name)) {
       throw new types_1.CorrelationError(
         `Adapter ${name} already registered`,
-        "ADAPTER_EXISTS",
+        "ADAPTER_EXISTS"
       );
     }
     this.adapters.set(name, adapter);
@@ -113,7 +113,7 @@ class CorrelationEngine extends eventemitter3_1.EventEmitter {
           {
             source: streamQuery.source,
             availableAdapters: Array.from(this.adapters.keys()),
-          },
+          }
         );
       }
       adapters.push(adapter);
@@ -131,7 +131,7 @@ class CorrelationEngine extends eventemitter3_1.EventEmitter {
         joinType: parsedQuery.joinType,
         joinKeys: parsedQuery.joinKeys,
         timeWindow: (0, utils_1.parseTimeWindow)(
-          parsedQuery.timeWindow || this.options.defaultTimeWindow,
+          parsedQuery.timeWindow || this.options.defaultTimeWindow
         ),
         lateTolerance: this.options.lateTolerance,
         maxEvents: this.options.maxEvents,
@@ -157,7 +157,7 @@ class CorrelationEngine extends eventemitter3_1.EventEmitter {
         joinType: parsedQuery.joinType,
         joinKeys: parsedQuery.joinKeys,
         timeWindow: (0, utils_1.parseTimeWindow)(
-          parsedQuery.timeWindow || this.options.defaultTimeWindow,
+          parsedQuery.timeWindow || this.options.defaultTimeWindow
         ),
         lateTolerance: this.options.lateTolerance,
         maxEvents: this.options.maxEvents,
@@ -174,7 +174,7 @@ class CorrelationEngine extends eventemitter3_1.EventEmitter {
         // Perform join and yield results
         for await (const correlation of joiner.join(
           streamInfo[0].stream,
-          streamInfo[1].stream,
+          streamInfo[1].stream
         )) {
           this.performanceMonitor.recordCorrelation();
           this.emit("correlationFound", correlation);

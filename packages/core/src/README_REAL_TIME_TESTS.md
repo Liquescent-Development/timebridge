@@ -119,7 +119,7 @@ Tests measure correlation emission timing to validate real-time behavior:
 const results = await collectCorrelationsWithTiming(
   joiner,
   leftStream,
-  rightStream,
+  rightStream
 );
 expect(results[0].receivedAt).toBeLessThan(100); // Should emit quickly
 ```

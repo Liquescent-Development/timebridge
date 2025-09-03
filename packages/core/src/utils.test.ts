@@ -40,7 +40,7 @@ describe("Utils", () => {
 
     it("should throw error for invalid format", () => {
       expect(() => parseTimeWindow("invalid")).toThrow(
-        "Invalid time window format",
+        "Invalid time window format"
       );
       expect(() => parseTimeWindow("5")).toThrow("Invalid time window format");
       expect(() => parseTimeWindow("5x")).toThrow("Invalid time window format");

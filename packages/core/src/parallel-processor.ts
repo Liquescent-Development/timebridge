@@ -36,7 +36,7 @@ export class ParallelProcessor extends EventEmitter {
    */
   async processWindows<T>(
     windows: T[],
-    processor: (window: T) => Promise<any>,
+    processor: (window: T) => Promise<any>
   ): Promise<any[]> {
     // Split windows into chunks for parallel processing
     const chunkSize = Math.ceil(windows.length / this.options.maxWorkers!);
@@ -58,7 +58,7 @@ export class ParallelProcessor extends EventEmitter {
    * Process multiple streams in parallel
    */
   async *processStreamsParallel(
-    streams: Array<{ name: string; stream: AsyncIterable<LogEvent> }>,
+    streams: Array<{ name: string; stream: AsyncIterable<LogEvent> }>
   ): AsyncGenerator<{ name: string; event: LogEvent }> {
     const buffers = new Map<string, LogEvent[]>();
     const iterators = new Map<string, AsyncIterator<LogEvent>>();
@@ -104,7 +104,7 @@ export class ParallelProcessor extends EventEmitter {
   async findCorrelationsParallel(
     leftEvents: Map<string, LogEvent[]>,
     rightEvents: Map<string, LogEvent[]>,
-    joinKeys: string[],
+    joinKeys: string[]
   ): Promise<CorrelatedEvent[]> {
     const tasks: Promise<CorrelatedEvent[]>[] = [];
     const keys = Array.from(leftEvents.keys());
@@ -120,8 +120,8 @@ export class ParallelProcessor extends EventEmitter {
           keyChunk,
           leftEvents,
           rightEvents,
-          joinKeys,
-        ),
+          joinKeys
+        )
       );
     }
 
@@ -131,7 +131,7 @@ export class ParallelProcessor extends EventEmitter {
 
   private async processChunk<T>(
     chunk: T[],
-    processor: (item: T) => Promise<any>,
+    processor: (item: T) => Promise<any>
   ): Promise<any[]> {
     const results: any[] = [];
 
@@ -141,7 +141,7 @@ export class ParallelProcessor extends EventEmitter {
     for (let i = 0; i < chunk.length; i += batchSize) {
       const batch = chunk.slice(i, i + batchSize);
       const batchResults = await Promise.all(
-        batch.map((item) => processor(item)),
+        batch.map((item) => processor(item))
       );
       results.push(...batchResults);
     }
@@ -153,7 +153,7 @@ export class ParallelProcessor extends EventEmitter {
     keys: string[],
     leftEvents: Map<string, LogEvent[]>,
     rightEvents: Map<string, LogEvent[]>,
-    joinKeys: string[],
+    joinKeys: string[]
   ): Promise<CorrelatedEvent[]> {
     const correlations: CorrelatedEvent[] = [];
 
@@ -194,7 +194,7 @@ export class ParallelProcessor extends EventEmitter {
 
   private async raceWithTimeout<T>(
     promises: Promise<T>[],
-    timeoutMs: number,
+    timeoutMs: number
   ): Promise<T[]> {
     const timeout = new Promise<T[]>((resolve) => {
       setTimeout(() => resolve([]), timeoutMs);

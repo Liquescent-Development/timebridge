@@ -23,7 +23,7 @@ class MultiStreamJoiner {
     }));
     // Process all streams concurrently
     const promises = streamData.map((sd) =>
-      this.processStream(sd.stream, sd.events, sd.name),
+      this.processStream(sd.stream, sd.events, sd.name)
     );
     // Start correlation checking
     const correlationInterval = setInterval(() => {
@@ -103,7 +103,7 @@ class MultiStreamJoiner {
       // Apply join type logic
       const shouldInclude = this.shouldIncludeCorrelation(
         matchedStreams.length,
-        streamData.length,
+        streamData.length
       );
       if (shouldInclude && eventsForKey.length > 0) {
         // Apply temporal filtering if specified
@@ -114,8 +114,8 @@ class MultiStreamJoiner {
               key,
               temporalFiltered,
               matchedStreams,
-              streamData.length,
-            ),
+              streamData.length
+            )
           );
         }
       }
@@ -145,7 +145,7 @@ class MultiStreamJoiner {
     // Sort events by timestamp
     const sorted = [...events].sort(
       (a, b) =>
-        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
     );
     if (sorted.length === 0) return [];
     const filtered = [];
@@ -186,7 +186,7 @@ class MultiStreamJoiner {
       if (exactMatch) {
         const [, field, value] = exactMatch;
         const hasMatch = correlation.events.some(
-          (event) => event.labels[field] === value,
+          (event) => event.labels[field] === value
         );
         if (!hasMatch) return false;
       }
@@ -197,7 +197,7 @@ class MultiStreamJoiner {
     // Sort events by timestamp
     events.sort(
       (a, b) =>
-        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
     );
     const earliestTime = events[0].timestamp;
     const latestTime = events[events.length - 1].timestamp;

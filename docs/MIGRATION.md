@@ -11,6 +11,199 @@
 
 ## Version Migration
 
+### Upgrading from v0.0.7 to v0.0.8 (TimeBridge API Changes)
+
+#### New Unified Result Type (TimeQLResult)
+
+The major change in v0.0.8 is the introduction of a unified result type with clear type discrimination:
+
+```javascript
+// OLD (v0.0.7 and earlier)
+for await (const result of executor.execute(query)) {
+  // result was either LogEvent or CorrelatedEvent
+  // Required duck typing or instanceof checks
+  if ('correlationId' in result) {
+    // Handle CorrelatedEvent
+    console.log('Correlation:', result.correlationId);
+  } else {
+    // Handle LogEvent
+    console.log('Event:', result.message);
+  }
+}
+
+// NEW (v0.0.8+)
+for await (const result of executor.execute(query)) {
+  // result is always TimeQLResult with type discriminator
+  if (result.type === 'event') {
+    // result.data is LogEvent
+    console.log('Event:', result.data.message);
+  } else if (result.type === 'correlation') {
+    // result.data is CorrelatedEvent
+    console.log('Correlation:', result.data.correlationId);
+  }
+}
+```
+
+#### New Type Guards for Better TypeScript Support
+
+```typescript
+// Import new type guards
+import { isEventResult, isCorrelationResult } from '@timebridge/core';
+
+// Type-safe processing
+for await (const result of executor.execute(query)) {
+  if (isEventResult(result)) {
+    // TypeScript knows result.data is LogEvent
+    const event: LogEvent = result.data;
+    console.log(event.message);
+  } else if (isCorrelationResult(result)) {
+    // TypeScript knows result.data is CorrelatedEvent
+    const correlation: CorrelatedEvent = result.data;
+    console.log(correlation.correlationId);
+  }
+}
+```
+
+#### New Specific Query Methods
+
+When you know the query type in advance, use specific methods for cleaner code:
+
+```javascript
+// OLD (v0.0.7) - Always used execute()
+for await (const result of executor.execute(directQuery)) {
+  // Had to check result type
+}
+
+// NEW (v0.0.8) - Use specific methods
+// For direct queries (single data source)
+for await (const event of executor.executeEvents("graylog(level:error)[5m]")) {
+  // Directly returns LogEvent objects
+  console.log(event.message);
+}
+
+// For correlation queries (multiple data sources)
+for await (const correlation of executor.executeCorrelation(correlationQuery)) {
+  // Directly returns CorrelatedEvent objects  
+  console.log(correlation.correlationId);
+}
+```
+
+#### Graylog Adapter Behavior Changes
+
+Significant changes to Graylog query behavior:
+
+```javascript
+// OLD (v0.0.7) - All queries polled continuously
+const adapter = new GraylogAdapter({
+  url: "http://graylog.example.com",
+  apiToken: "token",
+  pollInterval: 2000, // Always used for all queries
+});
+
+for await (const event of executor.execute("graylog(level:error)[5m]")) {
+  // Would poll forever, never complete
+}
+
+// NEW (v0.0.8) - Historical by default, continuous opt-in
+const adapter = new GraylogAdapter({
+  url: "http://graylog.example.com",
+  apiToken: "token",
+  maxResults: 5000, // NEW: Configurable result limit (default: 10000)
+  pollInterval: 2000, // Only used when continuous: true
+});
+
+// Default: Historical snapshot (fetches once and completes)
+for await (const result of executor.execute("graylog(level:error)[5m]")) {
+  // Fetches last 5 minutes of data once, then completes
+  // Perfect for correlation analysis
+}
+
+// Explicit continuous mode for real-time monitoring
+for await (const result of executor.execute(
+  "graylog(level:error)[5m]",
+  { continuous: true }
+)) {
+  // Polls continuously like v0.0.7 behavior
+}
+```
+
+#### Migration Script for v0.0.8
+
+```javascript
+// Automated migration helper for common patterns
+function migrateToV008(oldCode) {
+  return oldCode
+    // Update result handling
+    .replace(
+      /for await \(const (\w+) of executor\.execute\(([^)]+)\)\) \{\s*if \('correlationId' in \1\)/g,
+      'for await (const $1 of executor.execute($2)) {\n  if ($1.type === "correlation")'
+    )
+    .replace(
+      /console\.log\(([^.]+)\.correlationId\)/g,
+      'console.log($1.data.correlationId)'
+    )
+    .replace(
+      /console\.log\(([^.]+)\.message\)/g,
+      'console.log($1.data.message)'
+    )
+    // Add maxResults to Graylog adapters
+    .replace(
+      /(new GraylogAdapter\({[^}]*)(})/g,
+      '$1,\n  maxResults: 10000 // Add result limit\n$2'
+    );
+}
+
+// Example usage
+const oldCode = `
+for await (const event of executor.execute(query)) {
+  if ('correlationId' in event) {
+    console.log(event.correlationId);
+  } else {
+    console.log(event.message);
+  }
+}
+`;
+
+const newCode = migrateToV008(oldCode);
+console.log('Migrated code:', newCode);
+```
+
+#### Breaking Changes Summary
+
+1. **Result Structure**: All results are now wrapped in `TimeQLResult` with `type` and `data` fields
+2. **Graylog Behavior**: Default changed from continuous polling to historical snapshots
+3. **Type Checking**: Duck typing with `'correlationId' in result` replaced by `result.type === 'correlation'`
+4. **New Required Imports**: Type guards `isEventResult` and `isCorrelationResult` for TypeScript users
+
+#### Backward Compatibility
+
+To maintain compatibility during migration:
+
+```javascript
+// Compatibility helper function
+function unwrapResult(result) {
+  // Handle both old and new result formats
+  if (result.type && result.data) {
+    // New v0.0.8 format
+    return result.data;
+  } else {
+    // Old v0.0.7 format
+    return result;
+  }
+}
+
+// Use during migration period
+for await (const result of executor.execute(query)) {
+  const unwrapped = unwrapResult(result);
+  
+  if ('correlationId' in unwrapped) {
+    // Handle correlation
+  } else {
+    // Handle event
+  }
+}
+```
+
 ### Upgrading from 0.x to 1.0
 
 #### Breaking Changes
@@ -88,7 +281,11 @@ console.log("Migrated query:", newQuery);
 
 ```javascript
 // 1. Performance optimizations
-const { EventDeduplicator, IndexedEventStore, ParallelProcessor } = require('@liquescent/log-correlator-core');
+const {
+  EventDeduplicator,
+  IndexedEventStore,
+  ParallelProcessor,
+} = require("@liquescent/log-correlator-core");
 
 // 2. Enhanced query syntax
 const query = `
@@ -98,11 +295,14 @@ const query = `
 `;
 
 // 3. Better TypeScript support
-import { CorrelationEngine, CorrelationEngineOptions } from '@liquescent/log-correlator-core';
+import {
+  CorrelationEngine,
+  CorrelationEngineOptions,
+} from "@liquescent/log-correlator-core";
 
 const options: CorrelationEngineOptions = {
   timeWindow: 30000,
-  maxEvents: 10000
+  maxEvents: 10000,
 };
 ```
 
@@ -610,13 +810,16 @@ for await (const correlation of engine.correlate(query)) {
 
 ### Deprecation Timeline
 
-| Feature             | Deprecated In | Removed In | Alternative      |
-| ------------------- | ------------- | ---------- | ---------------- |
-| Callback APIs       | v2.0          | v3.0       | Async/await      |
-| Old config keys     | v1.0          | v2.0       | New key names    |
-| Sync validation     | v2.0          | v3.0       | Async validation |
-| Event-based results | v2.0          | v3.0       | Async iteration  |
-| Global config       | v2.0          | v3.0       | Instance config  |
+| Feature                  | Deprecated In | Removed In | Alternative         |
+| ------------------------ | ------------- | ---------- | ------------------- |
+| Direct result unwrapping | v0.0.8        | v0.1.0     | TimeQLResult.data   |
+| Duck typing checks       | v0.0.8        | v0.1.0     | result.type checks  |
+| Continuous by default    | v0.0.8        | v0.1.0     | { continuous: true }|
+| Callback APIs            | v2.0          | v3.0       | Async/await         |
+| Old config keys          | v1.0          | v2.0       | New key names       |
+| Sync validation          | v2.0          | v3.0       | Async validation    |
+| Event-based results      | v2.0          | v3.0       | Async iteration     |
+| Global config            | v2.0          | v3.0       | Instance config     |
 
 ### Handling Deprecation Warnings
 

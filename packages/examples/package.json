@@ -1,17 +1,22 @@
 {
-  "name": "@liquescent/log-correlator-examples",
+  "name": "@timebridge/examples",
   "version": "0.0.7",
   "private": true,
-  "description": "Usage examples for log-correlator",
+  "description": "Usage examples for TimeBridge",
   "scripts": {
     "build": "echo 'No build needed for examples'",
     "example:basic": "node basic-correlation.js",
     "example:electron": "node electron-integration.js",
-    "example:streaming": "node streaming-correlation.js"
+    "example:streaming": "node streaming-correlation.js",
+    "example:metrics": "node metrics-correlation-example.js",
+    "example:slo": "node slo-monitoring-example.js",
+    "example:timebuddy": "node timebuddy-integration.js"
   },
   "dependencies": {
-    "@liquescent/log-correlator-core": "file:../core",
-    "@liquescent/log-correlator-loki": "file:../adapters/loki",
-    "@liquescent/log-correlator-graylog": "file:../adapters/graylog"
+    "@timebridge/core": "file:../core",
+    "@timebridge/loki": "file:../adapters/loki",
+    "@timebridge/graylog": "file:../adapters/graylog",
+    "@timebridge/prometheus": "file:../adapters/prometheus",
+    "@timebridge/influxdb": "file:../adapters/influxdb"
   }
 }

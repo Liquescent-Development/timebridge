@@ -87,7 +87,7 @@ for await (const correlation of engine.correlate(leftJoinQuery)) {
     console.log(
       "- Missing streams:",
       correlation.metadata.totalStreams -
-        correlation.metadata.matchedStreams.length,
+        correlation.metadata.matchedStreams.length
     );
   }
 }
@@ -224,7 +224,7 @@ try {
 } catch (error) {
   if (error.code === "AUTH_REQUIRED") {
     console.error(
-      "Authentication required: provide apiToken or username/password",
+      "Authentication required: provide apiToken or username/password"
     );
   } else if (error.code === "GRAYLOG_SEARCH_ERROR") {
     console.error("Search failed:", error.details?.status);
@@ -580,8 +580,8 @@ class ThrottledEngine {
         await new Promise((resolve) =>
           setTimeout(
             resolve,
-            this.minProcessInterval - (now - this.lastProcessTime),
-          ),
+            this.minProcessInterval - (now - this.lastProcessTime)
+          )
         );
       }
 
@@ -803,7 +803,7 @@ const testV6API = async () => {
         limit: 100,
         chunk_size: 100,
       }),
-    },
+    }
   );
 
   if (response.ok) {
@@ -968,7 +968,7 @@ function debugQuery(query) {
         if (correlationCount % 100 === 0) {
           const elapsed = Date.now() - startTime;
           console.log(
-            `[DEBUG] ${correlationCount} correlations in ${elapsed}ms`,
+            `[DEBUG] ${correlationCount} correlations in ${elapsed}ms`
           );
         }
 
@@ -977,7 +977,7 @@ function debugQuery(query) {
 
       const totalTime = Date.now() - startTime;
       console.log(
-        `[DEBUG] Completed: ${correlationCount} correlations in ${totalTime}ms`,
+        `[DEBUG] Completed: ${correlationCount} correlations in ${totalTime}ms`
       );
     },
   };
@@ -1126,7 +1126,7 @@ async function generateReport() {
 
   require("fs").writeFileSync(
     "correlation-diagnostics.json",
-    JSON.stringify(report, null, 2),
+    JSON.stringify(report, null, 2)
   );
 
   console.log("Diagnostic report saved");

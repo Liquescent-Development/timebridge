@@ -1,12 +1,12 @@
 // Advanced query features demonstration - vanilla JavaScript
-const { CorrelationEngine } = require("@liquescent/log-correlator-core");
-const { LokiAdapter } = require("@liquescent/log-correlator-loki");
-const { GraylogAdapter } = require("@liquescent/log-correlator-graylog");
-const { PromQLAdapter } = require("@liquescent/log-correlator-promql");
+const { TimeBridgeEngine } = require("@timebridge/core");
+const { LokiAdapter } = require("@timebridge/loki");
+const { GraylogAdapter } = require("@timebridge/graylog");
+const { PromQLAdapter } = require("@timebridge/promql");
 
 async function main() {
   // Create correlation engine with advanced configuration
-  const engine = new CorrelationEngine({
+  const engine = new TimeBridgeEngine({
     defaultTimeWindow: "5m",
     timeWindow: 300000, // 5 minute window
     maxEvents: 50000, // Higher memory limit for complex correlations
@@ -22,7 +22,7 @@ async function main() {
       url: "http://localhost:3100",
       websocket: true, // Use WebSocket for real-time
       reconnectInterval: 5000,
-    }),
+    })
   );
 
   engine.addAdapter(
@@ -32,7 +32,7 @@ async function main() {
       username: "admin",
       password: "admin",
       pollInterval: 1000,
-    }),
+    })
   );
 
   engine.addAdapter(
@@ -40,7 +40,7 @@ async function main() {
     new PromQLAdapter({
       url: "http://localhost:9090",
       pollInterval: 5000,
-    }),
+    })
   );
 
   // ============================================
@@ -88,10 +88,18 @@ async function main() {
     for await (const correlation of engine.correlate(groupLeftQuery)) {
       console.log(`  User ${correlation.joinValue}:`);
       console.log(
-        `    API events: ${correlation.events.filter((e) => e.source === "loki" && e.labels.service === "api").length}`,
+        `    API events: ${
+          correlation.events.filter(
+            (e) => e.source === "loki" && e.labels.service === "api"
+          ).length
+        }`
       );
       console.log(
-        `    Auth events: ${correlation.events.filter((e) => e.source === "loki" && e.labels.service === "auth").length}`,
+        `    Auth events: ${
+          correlation.events.filter(
+            (e) => e.source === "loki" && e.labels.service === "auth"
+          ).length
+        }`
       );
     }
   } catch (error) {
@@ -119,7 +127,7 @@ async function main() {
       correlationCount++;
     }
     console.log(
-      `  Found ${correlationCount} correlations ignoring instance differences`,
+      `  Found ${correlationCount} correlations ignoring instance differences`
     );
   } catch (error) {
     console.error("Ignoring clause correlation failed:", error);
@@ -139,13 +147,13 @@ async function main() {
 
   console.log("Query:", labelMappingQuery.trim());
   console.log(
-    "Mapping order_id to transaction_id and customer_id to user_id...\n",
+    "Mapping order_id to transaction_id and customer_id to user_id...\n"
   );
 
   try {
     for await (const correlation of engine.correlate(labelMappingQuery)) {
       console.log(
-        `  Correlated order ${correlation.joinValue} with payment transaction`,
+        `  Correlated order ${correlation.joinValue} with payment transaction`
       );
     }
   } catch (error) {
@@ -167,16 +175,16 @@ async function main() {
 
   console.log("Query:", filterQuery.trim());
   console.log(
-    "Filtering for errors (4xx/5xx status) excluding DEBUG logs...\n",
+    "Filtering for errors (4xx/5xx status) excluding DEBUG logs...\n"
   );
 
   try {
     for await (const correlation of engine.correlate(filterQuery)) {
       const errorEvents = correlation.events.filter(
-        (e) => e.labels.status && e.labels.status.match(/^[45]/),
+        (e) => e.labels.status && e.labels.status.match(/^[45]/)
       );
       console.log(
-        `  Request ${correlation.joinValue}: ${errorEvents.length} error events`,
+        `  Request ${correlation.joinValue}: ${errorEvents.length} error events`
       );
     }
   } catch (error) {
@@ -204,7 +212,7 @@ async function main() {
       orphanedRequests++;
     }
     console.log(
-      `  Found ${orphanedRequests} frontend requests with no backend correlation`,
+      `  Found ${orphanedRequests} frontend requests with no backend correlation`
     );
   } catch (error) {
     console.error("Anti-join correlation failed:", error);
@@ -232,10 +240,10 @@ async function main() {
   try {
     for await (const correlation of engine.correlate(multiStreamQuery)) {
       const services = new Set(
-        correlation.events.map((e) => e.labels.service || e.source),
+        correlation.events.map((e) => e.labels.service || e.source)
       );
       console.log(
-        `  Trace ${correlation.joinValue}: ${services.size} services involved`,
+        `  Trace ${correlation.joinValue}: ${services.size} services involved`
       );
       console.log(`    Services: ${Array.from(services).join(", ")}`);
     }
@@ -295,12 +303,12 @@ async function main() {
       if (complexCorrelations === 1) {
         console.log(`  Sample correlation:`);
         console.log(
-          `    Join: ${correlation.joinKey} = ${correlation.joinValue}`,
+          `    Join: ${correlation.joinKey} = ${correlation.joinValue}`
         );
         console.log(`    Events: ${correlation.events.length}`);
         console.log(`    Completeness: ${correlation.metadata.completeness}`);
         console.log(
-          `    Time span: ${correlation.timeWindow.start} to ${correlation.timeWindow.end}`,
+          `    Time span: ${correlation.timeWindow.start} to ${correlation.timeWindow.end}`
         );
       }
     }
@@ -317,7 +325,7 @@ async function main() {
 
   engine.on("performanceMetrics", (metrics) => {
     console.log(
-      `  Memory: ${(metrics.memoryUsage / 1024 / 1024).toFixed(2)} MB`,
+      `  Memory: ${(metrics.memoryUsage / 1024 / 1024).toFixed(2)} MB`
     );
     console.log(`  CPU: ${metrics.cpuUsage.toFixed(2)}%`);
     console.log(`  Event rate: ${metrics.eventRate} events/sec`);

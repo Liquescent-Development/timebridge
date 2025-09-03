@@ -23,7 +23,7 @@ export class BackpressureController extends EventEmitter {
 
   async *controlFlow<T>(
     source: AsyncIterable<T>,
-    processor: (item: T) => Promise<void>,
+    processor: (item: T) => Promise<void>
   ): AsyncGenerator<T> {
     for await (const item of source) {
       // Check buffer size

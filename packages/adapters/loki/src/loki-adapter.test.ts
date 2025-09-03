@@ -1,5 +1,5 @@
 import { LokiAdapter, LokiAdapterOptions } from "./loki-adapter";
-import { CorrelationError } from "@liquescent/log-correlator-core";
+import { CorrelationError } from "@timebridge/core";
 import WebSocket from "ws";
 import fetch from "node-fetch";
 
@@ -142,7 +142,7 @@ describe("LokiAdapter", () => {
       // Simulate WebSocket connection opening
       setTimeout(() => {
         const openCallback = mockWs.on.mock.calls.find(
-          (call) => call[0] === "open",
+          (call) => call[0] === "open"
         )?.[1];
         if (openCallback) openCallback.call(mockWs);
 
@@ -166,7 +166,7 @@ describe("LokiAdapter", () => {
             "Content-Type": "application/json",
           }),
           handshakeTimeout: 30000,
-        }),
+        })
       );
 
       await adapter.destroy();
@@ -259,7 +259,7 @@ describe("LokiAdapter", () => {
         if (event === "error") {
           setTimeout(
             () => handler.call(mockWs, new Error("Connection failed")),
-            10,
+            10
           );
         }
         if (event === "open") {
@@ -293,7 +293,7 @@ describe("LokiAdapter", () => {
               if (event === "error") {
                 setTimeout(
                   () => handler.call(ws, new Error("Connection failed")),
-                  10,
+                  10
                 );
               }
             } else {
@@ -343,7 +343,7 @@ describe("LokiAdapter", () => {
           once: jest.fn().mockImplementation((event, handler) => {
             if (event === "error") {
               setImmediate(() =>
-                handler.call(ws, new Error("Connection failed")),
+                handler.call(ws, new Error("Connection failed"))
               );
             }
             // Don't call open handler
@@ -473,7 +473,7 @@ describe("LokiAdapter", () => {
           headers: expect.objectContaining({
             "Content-Type": "application/json",
           }),
-        }),
+        })
       );
 
       await adapter.destroy();
@@ -553,7 +553,7 @@ describe("LokiAdapter", () => {
             headers: expect.objectContaining({
               Authorization: "Bearer test-token",
             }),
-          }),
+          })
         );
       }
 
@@ -581,7 +581,7 @@ describe("LokiAdapter", () => {
             headers: expect.objectContaining({
               Authorization: "Bearer existing-bearer-token",
             }),
-          }),
+          })
         );
       }
 
@@ -611,7 +611,7 @@ describe("LokiAdapter", () => {
             headers: expect.objectContaining({
               "X-Custom-Header": "custom-value",
             }),
-          }),
+          })
         );
       }
 
@@ -666,7 +666,7 @@ describe("LokiAdapter", () => {
           headers: expect.objectContaining({
             "Content-Type": "application/json",
           }),
-        }),
+        })
       );
     });
 

@@ -2,13 +2,13 @@
 // This example shows how to detect error patterns across services
 // and correlate them with metrics to identify root causes
 
-const { CorrelationEngine } = require("@liquescent/log-correlator-core");
-const { LokiAdapter } = require("@liquescent/log-correlator-loki");
-const { PromQLAdapter } = require("@liquescent/log-correlator-promql");
+const { TimeBridgeEngine } = require("@timebridge/core");
+const { LokiAdapter } = require("@timebridge/loki");
+const { PromQLAdapter } = require("@timebridge/promql");
 
 async function detectErrorPatterns() {
   // Initialize correlation engine
-  const engine = new CorrelationEngine({
+  const engine = new TimeBridgeEngine({
     defaultTimeWindow: "5m",
     maxEvents: 50000,
     lateTolerance: "30s",
@@ -21,7 +21,7 @@ async function detectErrorPatterns() {
       url: process.env.LOKI_URL || "http://localhost:3100",
       websocket: true,
       authToken: process.env.LOKI_TOKEN,
-    }),
+    })
   );
 
   // Add metrics adapter for correlation with system metrics
@@ -30,7 +30,7 @@ async function detectErrorPatterns() {
     new PromQLAdapter({
       url: process.env.PROMETHEUS_URL || "http://localhost:9090",
       authToken: process.env.PROMETHEUS_TOKEN,
-    }),
+    })
   );
 
   console.log("🔍 Starting error pattern detection...\n");
@@ -69,10 +69,10 @@ async function detectCascadingFailures(engine) {
 
     // Analyze the cascade pattern
     const frontendError = correlation.events.find(
-      (e) => e.labels.service === "frontend",
+      (e) => e.labels.service === "frontend"
     );
     const backendError = correlation.events.find(
-      (e) => e.labels.service === "backend",
+      (e) => e.labels.service === "backend"
     );
 
     if (frontendError && backendError) {
@@ -88,14 +88,14 @@ async function detectCascadingFailures(engine) {
       // Check if this is a critical pattern
       if (timeDiff < 100) {
         console.log(
-          `     🔴 CRITICAL: Near-instant cascade indicates synchronous failure!`,
+          `     🔴 CRITICAL: Near-instant cascade indicates synchronous failure!`
         );
       }
     }
   }
 
   console.log(
-    `\n  Total cascading failures found: ${cascadingErrors.length}\n`,
+    `\n  Total cascading failures found: ${cascadingErrors.length}\n`
   );
 }
 
@@ -119,7 +119,7 @@ async function correlateErrorsWithLatency(engine) {
     // Find the metric value
     const metricEvent = correlation.events.find((e) => e.source === "promql");
     const errorEvent = correlation.events.find(
-      (e) => e.labels.level === "error",
+      (e) => e.labels.level === "error"
     );
 
     if (metricEvent && errorEvent) {
@@ -214,7 +214,7 @@ async function monitorErrorsRealTime(engine) {
       }
 
       console.log(
-        `  🔴 Critical error detected at ${new Date().toISOString()}`,
+        `  🔴 Critical error detected at ${new Date().toISOString()}`
       );
       console.log(`     Request: ${correlation.joinValue}`);
 
@@ -227,7 +227,9 @@ async function monitorErrorsRealTime(engine) {
       // Alert on error spike
       if (errorCount >= alertThreshold) {
         console.log(
-          `\n  🚨 ALERT: Error spike detected! ${errorCount} errors in ${alertWindow / 1000}s`,
+          `\n  🚨 ALERT: Error spike detected! ${errorCount} errors in ${
+            alertWindow / 1000
+          }s`
         );
         console.log(`     Consider scaling up or enabling circuit breakers\n`);
         errorCount = 0; // Reset counter after alert

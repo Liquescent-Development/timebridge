@@ -30,6 +30,29 @@ export interface CorrelatedEvent {
   };
 }
 
+/**
+ * Unified result type for TimeQL queries
+ * Provides clear type discrimination between single events and correlations
+ */
+export interface TimeQLResult {
+  type: 'event' | 'correlation';
+  data: LogEvent | CorrelatedEvent;
+}
+
+/**
+ * Type guard for LogEvent results
+ */
+export function isEventResult(result: TimeQLResult): result is TimeQLResult & { type: 'event'; data: LogEvent } {
+  return result.type === 'event';
+}
+
+/**
+ * Type guard for CorrelatedEvent results
+ */
+export function isCorrelationResult(result: TimeQLResult): result is TimeQLResult & { type: 'correlation'; data: CorrelatedEvent } {
+  return result.type === 'correlation';
+}
+
 export interface CorrelationEngineOptions {
   defaultTimeWindow?: string;
   timeWindow?: number;
@@ -46,6 +69,38 @@ export interface StreamOptions {
   timeRange?: string;
   limit?: number;
   [key: string]: unknown;
+}
+
+export interface StreamQuery {
+  source: string;
+  stream?: string;  // Optional stream name for filtering
+  selector: string;
+  timeRange?: string;
+}
+
+export type JoinType = 'inner' | 'left' | 'anti' | 'and' | 'or' | 'unless';
+
+export interface GroupingConfig {
+  side: "left" | "right";
+  labels: string[];
+}
+
+export interface ParsedQuery {
+  leftStream: StreamQuery;
+  rightStream?: StreamQuery;  // Made optional for single-stream queries
+  joinType: JoinType;
+  joinKeys: string[];
+  timeWindow?: string;
+  temporal?: string;
+  grouping?: GroupingConfig;
+  ignoring?: string[];
+  labelMappings?: Array<{
+    left: string;
+    right: string;
+  }>;
+  filter?: string;
+  additionalStreams?: StreamQuery[];
+  metadata?: Record<string, any>;  // Added for query hints and other metadata
 }
 
 export interface DataSourceAdapter {

@@ -135,11 +135,11 @@ export class QueryParser {
       // Extract modifiers from the section
       const temporal = this.extractModifier(
         modifierSection,
-        /within\s*\(([^)]+)\)/,
+        /within\s*\(([^)]+)\)/
       );
       const ignoring = this.extractModifier(
         modifierSection,
-        /ignoring\s*\(([^)]+)\)/,
+        /ignoring\s*\(([^)]+)\)/
       );
       const grouping = this.extractGrouping(modifierSection);
 
@@ -160,17 +160,17 @@ export class QueryParser {
 
   private extractModifier(
     section: string,
-    pattern: RegExp,
+    pattern: RegExp
   ): string | undefined {
     const match = section.match(pattern);
     return match ? match[1] : undefined;
   }
 
   private extractGrouping(
-    section: string,
+    section: string
   ): { side: "left" | "right"; labels: string[] } | undefined {
     const groupingMatch = section.match(
-      /(group_left|group_right)\s*(?:\(([^)]*)\))?/,
+      /(group_left|group_right)\s*(?:\(([^)]*)\))?/
     );
     if (!groupingMatch) return undefined;
 

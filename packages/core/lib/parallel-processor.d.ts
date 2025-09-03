@@ -19,7 +19,7 @@ export declare class ParallelProcessor extends EventEmitter {
    */
   processWindows<T>(
     windows: T[],
-    processor: (window: T) => Promise<any>,
+    processor: (window: T) => Promise<any>
   ): Promise<any[]>;
   /**
    * Process multiple streams in parallel
@@ -28,7 +28,7 @@ export declare class ParallelProcessor extends EventEmitter {
     streams: Array<{
       name: string;
       stream: AsyncIterable<LogEvent>;
-    }>,
+    }>
   ): AsyncGenerator<{
     name: string;
     event: LogEvent;
@@ -39,7 +39,7 @@ export declare class ParallelProcessor extends EventEmitter {
   findCorrelationsParallel(
     leftEvents: Map<string, LogEvent[]>,
     rightEvents: Map<string, LogEvent[]>,
-    joinKeys: string[],
+    joinKeys: string[]
   ): Promise<CorrelatedEvent[]>;
   private processChunk;
   private processCorrelationChunk;

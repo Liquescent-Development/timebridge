@@ -1,4 +1,4 @@
-import { DataSourceAdapter, LogEvent } from "@liquescent/log-correlator-core";
+import { DataSourceAdapter, LogEvent } from "@timebridge/core";
 export interface LokiAdapterOptions {
   url: string;
   websocket?: boolean;

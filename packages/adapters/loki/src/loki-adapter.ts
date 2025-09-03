@@ -2,10 +2,13 @@ import {
   DataSourceAdapter,
   LogEvent,
   CorrelationError,
-} from "@liquescent/log-correlator-core";
+  isGrafanaUrl,
+} from "@timebridge/core";
 import fetch from "node-fetch";
 import WebSocket from "ws";
 import { SocksProxyAgent } from "socks-proxy-agent";
+import { LogQLParser } from "./logql-parser";
+import { LokiGrafanaProxy } from "./loki-grafana-proxy";
 
 export interface LokiAdapterOptions {
   url: string;
@@ -14,6 +17,7 @@ export interface LokiAdapterOptions {
   timeout?: number;
   maxRetries?: number;
   authToken?: string;
+  datasourceName?: string; // Grafana data source name
   headers?: Record<string, string>;
   proxy?: {
     host: string;
@@ -21,6 +25,12 @@ export interface LokiAdapterOptions {
     username?: string;
     password?: string;
     type?: 4 | 5; // SOCKS4 or SOCKS5, defaults to 5
+  };
+  grafanaOptions?: {
+    refreshDataSources?: boolean;
+    datasourceCacheTTL?: number;
+    maxRetries?: number;
+    timeout?: number;
   };
 }
 
@@ -43,6 +53,9 @@ export class LokiAdapter implements DataSourceAdapter {
   private reconnectTimeout?: NodeJS.Timeout;
   private wsConnectionPromise?: Promise<void>;
   private proxyAgent?: SocksProxyAgent;
+  private parser: LogQLParser;
+  private grafanaProxy?: LokiGrafanaProxy;
+  private isGrafana?: boolean;
 
   constructor(private options: LokiAdapterOptions) {
     this.options = {
@@ -53,12 +66,48 @@ export class LokiAdapter implements DataSourceAdapter {
       ...options,
     };
 
+    // Initialize LogQL parser
+    this.parser = new LogQLParser();
+
     // Create SOCKS proxy agent if configured
     if (this.options.proxy) {
       const { host, port, username, password, type = 5 } = this.options.proxy;
       const auth = username && password ? `${username}:${password}@` : "";
       const proxyUrl = `socks${type}://${auth}${host}:${port}`;
       this.proxyAgent = new SocksProxyAgent(proxyUrl);
+    }
+
+    // Check if this is a Grafana instance and setup proxy
+    this.detectAndSetupGrafana();
+  }
+
+  private async detectAndSetupGrafana(): Promise<void> {
+    try {
+      // Quick detection check
+      const authHeader = this.options.authToken 
+        ? (this.options.authToken.startsWith("Bearer ") 
+          ? this.options.authToken 
+          : `Bearer ${this.options.authToken}`)
+        : "";
+      
+      this.isGrafana = await isGrafanaUrl(this.options.url, authHeader);
+      
+      if (this.isGrafana) {
+        // Create Grafana proxy
+        this.grafanaProxy = new LokiGrafanaProxy({
+          grafanaUrl: this.options.url,
+          authToken: authHeader,
+          datasourceName: this.options.datasourceName,
+          headers: this.options.headers,
+          proxy: this.options.proxy,
+          timeout: this.options.timeout,
+          maxRetries: this.options.maxRetries,
+          grafanaOptions: this.options.grafanaOptions,
+        });
+      }
+    } catch (error) {
+      // Detection failed, assume direct connection
+      this.isGrafana = false;
     }
   }
 
@@ -68,8 +117,16 @@ export class LokiAdapter implements DataSourceAdapter {
 
   async *createStream(
     query: string,
-    options?: unknown,
+    options?: unknown
   ): AsyncIterable<LogEvent> {
+    // Check if we should use Grafana proxy
+    if (this.grafanaProxy) {
+      const timeRange = this.parseTimeRange((options as { timeRange?: string })?.timeRange || "5m");
+      yield* await this.grafanaProxy.executeQuery(query, timeRange);
+      return;
+    }
+
+    // Direct Loki connection
     const timeRange = (options as { timeRange?: string })?.timeRange || "5m";
 
     if (this.options.websocket) {
@@ -79,9 +136,37 @@ export class LokiAdapter implements DataSourceAdapter {
     }
   }
 
+  private parseTimeRange(timeRange: string): { from: Date; to: Date } {
+    const now = new Date();
+    const match = timeRange.match(/^(\d+)([smhd])$/);
+    
+    if (!match) {
+      // Default to 5 minutes
+      return {
+        from: new Date(now.getTime() - 5 * 60 * 1000),
+        to: now,
+      };
+    }
+
+    const value = parseInt(match[1]);
+    const unit = match[2];
+    const multipliers: Record<string, number> = {
+      s: 1000,
+      m: 60 * 1000,
+      h: 60 * 60 * 1000,
+      d: 24 * 60 * 60 * 1000,
+    };
+
+    const rangeMs = value * (multipliers[unit] || 60000);
+    return {
+      from: new Date(now.getTime() - rangeMs),
+      to: now,
+    };
+  }
+
   private async *createWebSocketStream(
     query: string,
-    timeRange: string,
+    timeRange: string
   ): AsyncIterable<LogEvent> {
     const maxReconnectDelay = 30000; // 30 seconds max
     const baseReconnectDelay = 1000; // Start with 1 second
@@ -100,14 +185,14 @@ export class LokiAdapter implements DataSourceAdapter {
       } catch (error) {
         console.error(
           `WebSocket stream error (attempt ${this.reconnectAttempts + 1}):`,
-          error,
+          error
         );
 
         if (this.reconnectAttempts >= this.options.maxRetries! - 1) {
           throw new CorrelationError(
             "WebSocket connection failed after max retries",
             "WEBSOCKET_MAX_RETRIES",
-            { error: error instanceof Error ? error.message : String(error) },
+            { error: error instanceof Error ? error.message : String(error) }
           );
         }
 
@@ -115,7 +200,7 @@ export class LokiAdapter implements DataSourceAdapter {
         const delay = Math.min(
           baseReconnectDelay * Math.pow(2, this.reconnectAttempts) +
             Math.random() * 1000,
-          maxReconnectDelay,
+          maxReconnectDelay
         );
 
         this.reconnectAttempts++;
@@ -130,10 +215,12 @@ export class LokiAdapter implements DataSourceAdapter {
 
   private async *connectAndStream(
     query: string,
-    _timeRange: string,
+    _timeRange: string
   ): AsyncIterable<LogEvent> {
     const wsUrl = this.options.url.replace(/^http/, "ws");
-    const fullUrl = `${wsUrl}/loki/api/v1/tail?query=${encodeURIComponent(query)}`;
+    const fullUrl = `${wsUrl}/loki/api/v1/tail?query=${encodeURIComponent(
+      query
+    )}`;
 
     const wsOptions: any = {
       headers: this.buildHeaders(),
@@ -312,7 +399,7 @@ export class LokiAdapter implements DataSourceAdapter {
 
   private async *createPollingStream(
     query: string,
-    _timeRange: string,
+    _timeRange: string
   ): AsyncIterable<LogEvent> {
     const controller = new AbortController();
     this.activeStreams.add(controller);
@@ -342,7 +429,7 @@ export class LokiAdapter implements DataSourceAdapter {
             throw new CorrelationError(
               `Loki query failed: ${response.statusText}`,
               "LOKI_QUERY_ERROR",
-              { status: response.status },
+              { status: response.status }
             );
           }
 
@@ -372,7 +459,7 @@ export class LokiAdapter implements DataSourceAdapter {
 
         // Wait before next poll
         await new Promise((resolve) =>
-          setTimeout(resolve, this.options.pollInterval),
+          setTimeout(resolve, this.options.pollInterval)
         );
       }
     } finally {
@@ -382,7 +469,7 @@ export class LokiAdapter implements DataSourceAdapter {
 
   private parseLogEntry(
     labels: Record<string, string>,
-    entry: { ts: string; line: string },
+    entry: { ts: string; line: string }
   ): LogEvent {
     // Convert nanosecond timestamp to ISO string
     const timestampMs = parseInt(entry.ts, 10) / 1000000;
@@ -443,31 +530,18 @@ export class LokiAdapter implements DataSourceAdapter {
   }
 
   validateQuery(query: string): boolean {
-    // Basic validation for Loki LogQL syntax
-    try {
-      // Limit query length to prevent DoS
-      if (!query || query.length > 10000) {
-        return false;
-      }
-
-      // Check for basic LogQL structure without regex to avoid ReDoS
-      const openBrace = query.indexOf("{");
-      const closeBrace = query.indexOf("}");
-
-      if (openBrace === -1 || closeBrace === -1 || openBrace >= closeBrace) {
-        return false;
-      }
-
-      // Extract and validate label content without regex
-      const labelContent = query.substring(openBrace + 1, closeBrace);
-      if (!labelContent || labelContent.trim().length === 0) {
-        return false;
-      }
-
-      return true;
-    } catch {
-      return false;
+    // Use LogQL parser for comprehensive validation
+    const result = this.parser.validate(query);
+    
+    if (!result.valid && result.errors) {
+      console.error("LogQL validation errors:", result.errors);
     }
+    
+    if (result.warnings) {
+      console.warn("LogQL validation warnings:", result.warnings);
+    }
+    
+    return result.valid;
   }
 
   async getAvailableStreams(): Promise<string[]> {
@@ -483,7 +557,7 @@ export class LokiAdapter implements DataSourceAdapter {
       if (!response.ok) {
         throw new CorrelationError(
           "Failed to fetch available streams",
-          "LOKI_LABELS_ERROR",
+          "LOKI_LABELS_ERROR"
         );
       }
 

@@ -11,6 +11,7 @@ coverage/
 
 # Generated files
 packages/query-parser/src/generated/
+packages/adapters/influxdb/src/generated/
 test-parser*.js
 
 # Examples (vanilla JS)

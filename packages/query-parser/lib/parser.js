@@ -84,11 +84,11 @@ class QueryParser {
       // Extract modifiers from the section
       const temporal = this.extractModifier(
         modifierSection,
-        /within\s*\(([^)]+)\)/,
+        /within\s*\(([^)]+)\)/
       );
       const ignoring = this.extractModifier(
         modifierSection,
-        /ignoring\s*\(([^)]+)\)/,
+        /ignoring\s*\(([^)]+)\)/
       );
       const grouping = this.extractGrouping(modifierSection);
       joins.push({
@@ -110,7 +110,7 @@ class QueryParser {
   }
   extractGrouping(section) {
     const groupingMatch = section.match(
-      /(group_left|group_right)\s*(?:\(([^)]*)\))?/,
+      /(group_left|group_right)\s*(?:\(([^)]*)\))?/
     );
     if (!groupingMatch) return undefined;
     const side = groupingMatch[1] === "group_left" ? "left" : "right";

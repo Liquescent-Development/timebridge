@@ -1,2 +1,6 @@
 # Development environment
 .devcontainer/
+
+# Generated files
+**/generated/
+packages/adapters/influxdb/src/generated/

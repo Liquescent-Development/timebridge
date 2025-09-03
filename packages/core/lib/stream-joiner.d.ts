@@ -25,11 +25,11 @@ export declare class StreamJoiner {
   constructor(options: StreamJoinerOptions);
   join(
     leftStream: AsyncIterable<LogEvent>,
-    rightStream: AsyncIterable<LogEvent>,
+    rightStream: AsyncIterable<LogEvent>
   ): AsyncGenerator<CorrelatedEvent>;
   joinRealtime(
     leftStream: AsyncIterable<LogEvent>,
-    rightStream: AsyncIterable<LogEvent>,
+    rightStream: AsyncIterable<LogEvent>
   ): AsyncGenerator<CorrelatedEvent>;
   private joinRealtimeImpl;
   private processStreamRealtime;

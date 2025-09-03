@@ -49,20 +49,20 @@ class LokiAdapter {
       } catch (error) {
         console.error(
           `WebSocket stream error (attempt ${this.reconnectAttempts + 1}):`,
-          error,
+          error
         );
         if (this.reconnectAttempts >= this.options.maxRetries - 1) {
           throw new log_correlator_core_1.CorrelationError(
             "WebSocket connection failed after max retries",
             "WEBSOCKET_MAX_RETRIES",
-            { error: error instanceof Error ? error.message : String(error) },
+            { error: error instanceof Error ? error.message : String(error) }
           );
         }
         // Calculate exponential backoff with jitter
         const delay = Math.min(
           baseReconnectDelay * Math.pow(2, this.reconnectAttempts) +
             Math.random() * 1000,
-          maxReconnectDelay,
+          maxReconnectDelay
         );
         this.reconnectAttempts++;
         console.log(`Reconnecting in ${delay}ms...`);
@@ -74,7 +74,9 @@ class LokiAdapter {
   }
   async *connectAndStream(query, _timeRange) {
     const wsUrl = this.options.url.replace(/^http/, "ws");
-    const fullUrl = `${wsUrl}/loki/api/v1/tail?query=${encodeURIComponent(query)}`;
+    const fullUrl = `${wsUrl}/loki/api/v1/tail?query=${encodeURIComponent(
+      query
+    )}`;
     const ws = new ws_1.default(fullUrl, {
       headers: this.buildHeaders(),
       handshakeTimeout: this.options.timeout,
@@ -244,7 +246,7 @@ class LokiAdapter {
             throw new log_correlator_core_1.CorrelationError(
               `Loki query failed: ${response.statusText}`,
               "LOKI_QUERY_ERROR",
-              { status: response.status },
+              { status: response.status }
             );
           }
           const data = await response.json();
@@ -270,7 +272,7 @@ class LokiAdapter {
         }
         // Wait before next poll
         await new Promise((resolve) =>
-          setTimeout(resolve, this.options.pollInterval),
+          setTimeout(resolve, this.options.pollInterval)
         );
       }
     } finally {
@@ -354,7 +356,7 @@ class LokiAdapter {
       if (!response.ok) {
         throw new log_correlator_core_1.CorrelationError(
           "Failed to fetch available streams",
-          "LOKI_LABELS_ERROR",
+          "LOKI_LABELS_ERROR"
         );
       }
       const data = await response.json();

@@ -99,21 +99,21 @@ function updateReadmeVersions(oldVersion, newVersion) {
     // Match patterns like: @liquescent/log-correlator-core@^0.0.1
     content = content.replace(
       /(@liquescent\/log-correlator-[a-z-]+@\^?)\d+\.\d+\.\d+/g,
-      `$1${newVersion}`,
+      `$1${newVersion}`
     );
 
     // Update version in the pre-release warning
     // Match pattern like: This is version 0.0.1
     content = content.replace(
       /This is version \d+\.\d+\.\d+/g,
-      `This is version ${newVersion}`,
+      `This is version ${newVersion}`
     );
 
     // Update any standalone version references in code blocks
     // Match patterns like: "version": "0.0.1"
     content = content.replace(
       /"version":\s*"\d+\.\d+\.\d+"/g,
-      `"version": "${newVersion}"`,
+      `"version": "${newVersion}"`
     );
 
     if (content !== originalContent) {
@@ -128,7 +128,7 @@ function main() {
 
   if (!arg) {
     console.error(
-      "Usage: node scripts/bump-version.js [patch|minor|major|x.y.z]",
+      "Usage: node scripts/bump-version.js [patch|minor|major|x.y.z]"
     );
     process.exit(1);
   }
@@ -157,12 +157,12 @@ function main() {
   console.log(
     '2. Commit the changes: git add -A && git commit -m "chore: bump version to ' +
       newVersion +
-      '"',
+      '"'
   );
   console.log("3. Create a tag: git tag v" + newVersion);
   console.log("4. Push changes and tag: git push && git push --tags");
   console.log(
-    "\nThe GitHub Action will automatically publish to npm when the tag is pushed.",
+    "\nThe GitHub Action will automatically publish to npm when the tag is pushed."
   );
 }
 

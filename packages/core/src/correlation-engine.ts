@@ -11,27 +11,24 @@ import { MultiStreamJoiner } from "./multi-stream-joiner";
 import { BackpressureController } from "./backpressure-controller";
 import { PerformanceMonitor } from "./performance-monitor";
 import { parseTimeWindow } from "./utils";
-import {
-  PeggyQueryParser,
-  ParsedQuery,
-} from "@liquescent/log-correlator-query-parser";
+import { PeggyQueryParser, ParsedQuery } from "@timebridge/timeql-parser";
 
 /**
- * Main correlation engine for real-time log stream processing
+ * TimeBridge engine for real-time time-series data correlation
  * @extends EventEmitter
- * @fires CorrelationEngine#correlationFound - When a new correlation is discovered
- * @fires CorrelationEngine#performanceMetrics - Performance metrics update
- * @fires CorrelationEngine#memoryWarning - When memory usage exceeds threshold
- * @fires CorrelationEngine#adapterAdded - When a new adapter is registered
+ * @fires TimeBridgeEngine#correlationFound - When a new correlation is discovered
+ * @fires TimeBridgeEngine#performanceMetrics - Performance metrics update
+ * @fires TimeBridgeEngine#memoryWarning - When memory usage exceeds threshold
+ * @fires TimeBridgeEngine#adapterAdded - When a new adapter is registered
  * @example
  * ```javascript
- * const engine = new CorrelationEngine({
+ * const engine = new TimeBridgeEngine({
  *   timeWindow: 30000,
  *   maxEvents: 10000
  * });
  * ```
  */
-export class CorrelationEngine extends EventEmitter {
+export class TimeBridgeEngine extends EventEmitter {
   private adapters: Map<string, DataSourceAdapter> = new Map();
   private options: Required<CorrelationEngineOptions>;
   private activeJoiners: Set<StreamJoiner | MultiStreamJoiner> = new Set();
@@ -99,7 +96,7 @@ export class CorrelationEngine extends EventEmitter {
     if (this.adapters.has(name)) {
       throw new CorrelationError(
         `Adapter ${name} already registered`,
-        "ADAPTER_EXISTS",
+        "ADAPTER_EXISTS"
       );
     }
     this.adapters.set(name, adapter);
@@ -136,7 +133,7 @@ export class CorrelationEngine extends EventEmitter {
           {
             source: streamQuery.source,
             availableAdapters: Array.from(this.adapters.keys()),
-          },
+          }
         );
       }
       adapters.push(adapter);
@@ -157,7 +154,7 @@ export class CorrelationEngine extends EventEmitter {
         joinType: parsedQuery.joinType,
         joinKeys: parsedQuery.joinKeys,
         timeWindow: parseTimeWindow(
-          parsedQuery.timeWindow || this.options.defaultTimeWindow,
+          parsedQuery.timeWindow || this.options.defaultTimeWindow
         ),
         lateTolerance: this.options.lateTolerance as number,
         maxEvents: this.options.maxEvents,
@@ -185,7 +182,7 @@ export class CorrelationEngine extends EventEmitter {
         joinType: parsedQuery.joinType,
         joinKeys: parsedQuery.joinKeys,
         timeWindow: parseTimeWindow(
-          parsedQuery.timeWindow || this.options.defaultTimeWindow,
+          parsedQuery.timeWindow || this.options.defaultTimeWindow
         ),
         lateTolerance: this.options.lateTolerance as number,
         maxEvents: this.options.maxEvents,
@@ -204,7 +201,7 @@ export class CorrelationEngine extends EventEmitter {
         // Perform join and yield results
         for await (const correlation of joiner.join(
           streamInfo[0].stream,
-          streamInfo[1].stream,
+          streamInfo[1].stream
         )) {
           this.performanceMonitor.recordCorrelation();
           this.emit("correlationFound", correlation);
@@ -272,7 +269,7 @@ export class CorrelationEngine extends EventEmitter {
 
   private validateParsedQuery(
     result: ParsedQuery,
-    _originalQuery: string,
+    _originalQuery: string
   ): ParsedQuery {
     // Validate that we have the required streams
     if (!result.leftStream || !result.rightStream) {
@@ -293,7 +290,7 @@ export class CorrelationEngine extends EventEmitter {
   }
 
   private async *instrumentStream(
-    stream: AsyncIterable<LogEvent>,
+    stream: AsyncIterable<LogEvent>
   ): AsyncGenerator<LogEvent> {
     for await (const event of stream) {
       const startTime = new Date(event.timestamp).getTime();
@@ -303,14 +300,30 @@ export class CorrelationEngine extends EventEmitter {
   }
 
   private getAdapterForSource(source: string): DataSourceAdapter | undefined {
-    // Direct match
+    // Direct match (exact name like 'graylog-prod')
     if (this.adapters.has(source)) {
       return this.adapters.get(source);
     }
 
-    // Try to find adapter by name
+    // Case-insensitive match
     for (const [name, adapter] of this.adapters) {
       if (name.toLowerCase() === source.toLowerCase()) {
+        return adapter;
+      }
+    }
+
+    // If no exact match, try to find a default adapter for the base type
+    // e.g., 'graylog' query looks for any adapter starting with 'graylog'
+    const baseType = source.split("-")[0];
+
+    // First, look for an adapter registered as just the base type
+    if (this.adapters.has(baseType)) {
+      return this.adapters.get(baseType);
+    }
+
+    // Otherwise, find the first adapter that matches the base type
+    for (const [name, adapter] of this.adapters) {
+      if (name.split("-")[0].toLowerCase() === baseType.toLowerCase()) {
         return adapter;
       }
     }

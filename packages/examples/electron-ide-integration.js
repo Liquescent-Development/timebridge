@@ -2,18 +2,18 @@
 // Shows how to integrate the log correlator into an Electron-based IDE
 // for real-time log analysis and visualization
 
-const { CorrelationEngine } = require("@liquescent/log-correlator-core");
-const { LokiAdapter } = require("@liquescent/log-correlator-loki");
-const { GraylogAdapter } = require("@liquescent/log-correlator-graylog");
-const { PromQLAdapter } = require("@liquescent/log-correlator-promql");
+const { TimeBridgeEngine } = require("@timebridge/core");
+const { LokiAdapter } = require("@timebridge/loki");
+const { GraylogAdapter } = require("@timebridge/graylog");
+const { PromQLAdapter } = require("@timebridge/promql");
 const { EventEmitter } = require("events");
 
-class IDECorrelationEngine extends EventEmitter {
+class IDETimeBridgeEngine extends EventEmitter {
   constructor(config = {}) {
     super();
 
     // Initialize the correlation engine
-    this.engine = new CorrelationEngine({
+    this.engine = new TimeBridgeEngine({
       defaultTimeWindow: config.defaultTimeWindow || "5m",
       maxEvents: config.maxEvents || 10000,
       lateTolerance: config.lateTolerance || "30s",
@@ -53,7 +53,7 @@ class IDECorrelationEngine extends EventEmitter {
           websocket: config.enableWebSocket !== false,
           authToken: config.lokiToken,
           timeout: config.timeout || 30000,
-        }),
+        })
       );
     }
 
@@ -66,7 +66,7 @@ class IDECorrelationEngine extends EventEmitter {
           username: config.graylogUser,
           password: config.graylogPassword,
           pollInterval: config.pollInterval || 2000,
-        }),
+        })
       );
     }
 
@@ -77,7 +77,7 @@ class IDECorrelationEngine extends EventEmitter {
         new PromQLAdapter({
           url: config.prometheusUrl,
           authToken: config.prometheusToken,
-        }),
+        })
       );
     }
   }
@@ -248,12 +248,12 @@ class IDECorrelationEngine extends EventEmitter {
     if (events.length === 0) return null;
 
     const sortedEvents = [...events].sort(
-      (a, b) => new Date(a.timestamp) - new Date(b.timestamp),
+      (a, b) => new Date(a.timestamp) - new Date(b.timestamp)
     );
 
     const start = new Date(sortedEvents[0].timestamp).getTime();
     const end = new Date(
-      sortedEvents[sortedEvents.length - 1].timestamp,
+      sortedEvents[sortedEvents.length - 1].timestamp
     ).getTime();
     const duration = end - start;
 
@@ -277,7 +277,7 @@ class IDECorrelationEngine extends EventEmitter {
   // Generate a summary for quick understanding
   generateSummary(correlation) {
     const errorCount = correlation.events.filter(
-      (e) => this.detectSeverity(e) === "error",
+      (e) => this.detectSeverity(e) === "error"
     ).length;
 
     const sources = [...new Set(correlation.events.map((e) => e.source))];
@@ -389,7 +389,7 @@ class IDECorrelationEngine extends EventEmitter {
           type: "source",
           value: "promql(",
           description: "Query Prometheus metrics",
-        },
+        }
       );
     }
 
@@ -398,7 +398,7 @@ class IDECorrelationEngine extends EventEmitter {
       suggestions.push(
         { type: "operator", value: "and on(", description: "Inner join" },
         { type: "operator", value: "or on(", description: "Left join" },
-        { type: "operator", value: "unless on(", description: "Anti-join" },
+        { type: "operator", value: "unless on(", description: "Anti-join" }
       );
     }
 
@@ -420,7 +420,7 @@ class IDECorrelationEngine extends EventEmitter {
           value: "group_right(",
           description: "One-to-many join",
         },
-        { type: "modifier", value: "ignoring(", description: "Ignore labels" },
+        { type: "modifier", value: "ignoring(", description: "Ignore labels" }
       );
     }
 
@@ -486,7 +486,7 @@ class IDECorrelationEngine extends EventEmitter {
 // Example usage in an Electron renderer process
 async function setupIDEIntegration() {
   // Initialize the IDE correlation engine
-  const correlationEngine = new IDECorrelationEngine({
+  const correlationEngine = new IDETimeBridgeEngine({
     lokiUrl: "http://localhost:3100",
     graylogUrl: "http://localhost:9000",
     prometheusUrl: "http://localhost:9090",
@@ -525,7 +525,7 @@ async function setupIDEIntegration() {
   `);
 
   console.log(
-    `Found ${result.resultCount} correlations in ${result.executionTime}ms`,
+    `Found ${result.resultCount} correlations in ${result.executionTime}ms`
   );
 
   // Get query suggestions for autocomplete
@@ -560,4 +560,4 @@ function showNotification(notification) {
   console.log("Notification:", notification);
 }
 
-module.exports = { IDECorrelationEngine, setupIDEIntegration };
+module.exports = { IDETimeBridgeEngine, setupIDEIntegration };

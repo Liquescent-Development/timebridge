@@ -1,6 +1,6 @@
 import { StreamJoiner, StreamJoinerOptions } from "./stream-joiner";
 import { LogEvent, CorrelatedEvent } from "./types";
-import { JoinType } from "@liquescent/log-correlator-query-parser";
+import { JoinType } from "@timebridge/timeql-parser";
 
 describe("StreamJoiner", () => {
   const createTestEvent = (
@@ -8,7 +8,7 @@ describe("StreamJoiner", () => {
     labels: Record<string, string> = {},
     joinKeys: Record<string, string> = {},
     message = "test message",
-    source = "test-source",
+    source = "test-source"
   ): LogEvent => ({
     timestamp,
     source,
@@ -289,7 +289,7 @@ describe("StreamJoiner", () => {
             },
             {
               request_id: "req123",
-            },
+            }
           ),
         ];
 
@@ -301,7 +301,7 @@ describe("StreamJoiner", () => {
             },
             {
               request_id: "req123",
-            },
+            }
           ),
         ];
 
@@ -402,7 +402,7 @@ describe("StreamJoiner", () => {
             {
               request_id: "req123",
               trace_id: "trace456",
-            },
+            }
           ),
         ];
 
@@ -416,7 +416,7 @@ describe("StreamJoiner", () => {
             {
               request_id: "req123",
               trace_id: "trace456",
-            },
+            }
           ),
         ];
 
@@ -630,7 +630,7 @@ describe("StreamJoiner", () => {
             },
             {
               session_id: "session123", // In joinKeys
-            },
+            }
           ),
         ];
 
@@ -642,7 +642,7 @@ describe("StreamJoiner", () => {
             },
             {
               trace_id: "session123", // In joinKeys
-            },
+            }
           ),
         ];
 
@@ -674,7 +674,7 @@ describe("StreamJoiner", () => {
             },
             {
               session_id: "from_joinkeys",
-            },
+            }
           ),
         ];
 
@@ -714,7 +714,7 @@ describe("StreamJoiner", () => {
             },
             {
               request_id: "req123",
-            },
+            }
           ),
         ];
 
@@ -726,7 +726,7 @@ describe("StreamJoiner", () => {
             },
             {
               request_id: "req123",
-            },
+            }
           ),
         ];
 
@@ -757,7 +757,7 @@ describe("StreamJoiner", () => {
             {},
             {
               request_id: "req123",
-            },
+            }
           ),
         ];
 
@@ -767,7 +767,7 @@ describe("StreamJoiner", () => {
             {},
             {
               request_id: "req123",
-            },
+            }
           ),
         ];
 
@@ -859,7 +859,7 @@ describe("StreamJoiner", () => {
         expect(correlations).toHaveLength(1);
         expect(correlations[0].events).toHaveLength(2); // Only right events should pass filter
         expect(
-          correlations[0].events.every((e) => e.labels.status.match(/^[45]../)),
+          correlations[0].events.every((e) => e.labels.status.match(/^[45]../))
         ).toBe(true);
       });
 
@@ -998,7 +998,7 @@ describe("StreamJoiner", () => {
         expect(correlations).toHaveLength(1);
         expect(correlations[0].events).toHaveLength(2);
         expect(
-          correlations[0].events.every((e) => e.labels.service === "frontend"),
+          correlations[0].events.every((e) => e.labels.service === "frontend")
         ).toBe(true);
       });
 
@@ -1093,9 +1093,8 @@ describe("StreamJoiner", () => {
         expect(
           correlations[0].events.every(
             (e) =>
-              e.labels.service === "frontend" &&
-              e.labels.status.startsWith("2"),
-          ),
+              e.labels.service === "frontend" && e.labels.status.startsWith("2")
+          )
         ).toBe(true);
       });
 
@@ -1158,8 +1157,8 @@ describe("StreamJoiner", () => {
             (e) =>
               e.labels.service !== "test" &&
               ["ERROR", "WARN"].includes(e.labels.level) &&
-              e.labels.status !== "500",
-          ),
+              e.labels.status !== "500"
+          )
         ).toBe(true);
       });
     });
@@ -1374,8 +1373,8 @@ describe("StreamJoiner", () => {
         expect(correlations[0].events).toHaveLength(2);
         expect(
           correlations[0].events.every(
-            (e) => e.labels.message === "Error: Connection failed",
-          ),
+            (e) => e.labels.message === "Error: Connection failed"
+          )
         ).toBe(true);
       });
     });
@@ -1418,7 +1417,7 @@ describe("StreamJoiner", () => {
         expect(correlations).toHaveLength(1);
         expect(correlations[0].events).toHaveLength(2); // Both events pass filter
         expect(
-          correlations[0].events.every((e) => e.labels.level === "ERROR"),
+          correlations[0].events.every((e) => e.labels.level === "ERROR")
         ).toBe(true);
       });
 
@@ -1582,7 +1581,7 @@ describe("StreamJoiner", () => {
         expect(correlations[0].events).toHaveLength(2);
         expect(correlations[0].joinValue).toBe("session123");
         expect(
-          correlations[0].events.every((e) => e.labels.level !== "DEBUG"),
+          correlations[0].events.every((e) => e.labels.level !== "DEBUG")
         ).toBe(true);
       });
 
@@ -1605,7 +1604,7 @@ describe("StreamJoiner", () => {
             },
             {
               request_id: "req123",
-            },
+            }
           ),
         ];
 
@@ -1618,7 +1617,7 @@ describe("StreamJoiner", () => {
             },
             {
               request_id: "req123",
-            },
+            }
           ),
         ];
 
@@ -1722,7 +1721,7 @@ describe("StreamJoiner", () => {
         expect(correlations).toHaveLength(1);
         expect(correlations[0].events).toHaveLength(2); // Left + first right (second right filtered out)
         expect(
-          correlations[0].events.every((e) => e.labels.level !== "DEBUG"),
+          correlations[0].events.every((e) => e.labels.level !== "DEBUG")
         ).toBe(true);
       });
     });
@@ -1829,9 +1828,9 @@ describe("StreamJoiner", () => {
         expect(
           correlations.every((c) =>
             c.events.every(
-              (e) => e.labels.status && e.labels.status.startsWith("2"),
-            ),
-          ),
+              (e) => e.labels.status && e.labels.status.startsWith("2")
+            )
+          )
         ).toBe(true);
       });
     });
@@ -1904,8 +1903,8 @@ describe("StreamJoiner", () => {
           correlations[0].events.every(
             (e) =>
               ["frontend", "api-gateway"].includes(e.labels.service) &&
-              !["DEBUG", "TRACE"].includes(e.labels.level),
-          ),
+              !["DEBUG", "TRACE"].includes(e.labels.level)
+          )
         ).toBe(true);
       });
 
@@ -1957,8 +1956,8 @@ describe("StreamJoiner", () => {
           correlations[0].events.every(
             (e) =>
               e.labels.service === "payment-service" &&
-              e.labels.transaction_id === "tx123",
-          ),
+              e.labels.transaction_id === "tx123"
+          )
         ).toBe(true);
       });
     });
@@ -1979,7 +1978,7 @@ describe("StreamJoiner", () => {
             service: "test",
             batch_id: "batch123",
             sequence_id: `seq${i}`,
-          }),
+          })
         );
 
         const rightEvents = Array.from({ length: 50 }, (_, i) =>
@@ -1987,7 +1986,7 @@ describe("StreamJoiner", () => {
             service: "test",
             batch_id: "batch123",
             sequence_id: `seq${i + 1000}`, // Different sequence IDs (ignored)
-          }),
+          })
         );
 
         const leftStream = createAsyncIterable(leftEvents);
@@ -2059,7 +2058,7 @@ describe("StreamJoiner", () => {
   describe("real-time correlation processing", () => {
     // Helper function to create delayed async iterables for streaming simulation
     const createDelayedAsyncIterable = <T>(
-      items: Array<{ item: T; delay: number }>,
+      items: Array<{ item: T; delay: number }>
     ): AsyncIterable<T> => {
       return {
         async *[Symbol.asyncIterator]() {
@@ -2076,7 +2075,7 @@ describe("StreamJoiner", () => {
       joiner: StreamJoiner,
       leftStream: AsyncIterable<LogEvent>,
       rightStream: AsyncIterable<LogEvent>,
-      useRealtime = true,
+      useRealtime = true
     ) => {
       const results: Array<{
         correlation: CorrelatedEvent;
@@ -2114,7 +2113,7 @@ describe("StreamJoiner", () => {
             item: createTestEvent(
               "2025-08-13T10:00:00Z",
               {},
-              { request_id: "req1" },
+              { request_id: "req1" }
             ),
             delay: 10,
           },
@@ -2122,7 +2121,7 @@ describe("StreamJoiner", () => {
             item: createTestEvent(
               "2025-08-13T10:00:02Z",
               {},
-              { request_id: "req2" },
+              { request_id: "req2" }
             ),
             delay: 100,
           },
@@ -2133,7 +2132,7 @@ describe("StreamJoiner", () => {
             item: createTestEvent(
               "2025-08-13T10:00:01Z",
               {},
-              { request_id: "req1" },
+              { request_id: "req1" }
             ),
             delay: 50,
           }, // Matches req1
@@ -2141,7 +2140,7 @@ describe("StreamJoiner", () => {
             item: createTestEvent(
               "2025-08-13T10:00:03Z",
               {},
-              { request_id: "req2" },
+              { request_id: "req2" }
             ),
             delay: 150,
           }, // Matches req2
@@ -2153,7 +2152,7 @@ describe("StreamJoiner", () => {
         const results = await collectCorrelationsWithTiming(
           joiner,
           leftStream,
-          rightStream,
+          rightStream
         );
 
         expect(results).toHaveLength(2);
@@ -2176,7 +2175,7 @@ describe("StreamJoiner", () => {
             item: createTestEvent(
               "2025-08-13T10:00:00Z",
               {},
-              { request_id: "req1" },
+              { request_id: "req1" }
             ),
             delay: 10,
           },
@@ -2184,7 +2183,7 @@ describe("StreamJoiner", () => {
             item: createTestEvent(
               "2025-08-13T10:00:02Z",
               {},
-              { request_id: "req2" },
+              { request_id: "req2" }
             ),
             delay: 20,
           },
@@ -2195,7 +2194,7 @@ describe("StreamJoiner", () => {
             item: createTestEvent(
               "2025-08-13T10:00:03Z",
               {},
-              { request_id: "req2" },
+              { request_id: "req2" }
             ),
             delay: 30,
           }, // req2 completes first
@@ -2203,7 +2202,7 @@ describe("StreamJoiner", () => {
             item: createTestEvent(
               "2025-08-13T10:00:01Z",
               {},
-              { request_id: "req1" },
+              { request_id: "req1" }
             ),
             delay: 80,
           }, // req1 completes later
@@ -2215,7 +2214,7 @@ describe("StreamJoiner", () => {
         const results = await collectCorrelationsWithTiming(
           joiner,
           leftStream,
-          rightStream,
+          rightStream
         );
 
         expect(results).toHaveLength(2);
@@ -2236,7 +2235,7 @@ describe("StreamJoiner", () => {
             item: createTestEvent(
               "2025-08-13T10:00:00Z",
               {},
-              { request_id: "req1" },
+              { request_id: "req1" }
             ),
             delay: 10,
           },
@@ -2244,7 +2243,7 @@ describe("StreamJoiner", () => {
             item: createTestEvent(
               "2025-08-13T10:00:01Z",
               {},
-              { request_id: "req2" },
+              { request_id: "req2" }
             ),
             delay: 15,
           },
@@ -2252,7 +2251,7 @@ describe("StreamJoiner", () => {
             item: createTestEvent(
               "2025-08-13T10:00:02Z",
               {},
-              { request_id: "req3" },
+              { request_id: "req3" }
             ),
             delay: 20,
           },
@@ -2263,7 +2262,7 @@ describe("StreamJoiner", () => {
             item: createTestEvent(
               "2025-08-13T10:00:03Z",
               {},
-              { request_id: "req2" },
+              { request_id: "req2" }
             ),
             delay: 25,
           },
@@ -2271,7 +2270,7 @@ describe("StreamJoiner", () => {
             item: createTestEvent(
               "2025-08-13T10:00:04Z",
               {},
-              { request_id: "req1" },
+              { request_id: "req1" }
             ),
             delay: 30,
           },
@@ -2279,7 +2278,7 @@ describe("StreamJoiner", () => {
             item: createTestEvent(
               "2025-08-13T10:00:05Z",
               {},
-              { request_id: "req3" },
+              { request_id: "req3" }
             ),
             delay: 35,
           },
@@ -2291,7 +2290,7 @@ describe("StreamJoiner", () => {
         const results = await collectCorrelationsWithTiming(
           joiner,
           leftStream,
-          rightStream,
+          rightStream
         );
 
         expect(results).toHaveLength(3);
@@ -2318,7 +2317,7 @@ describe("StreamJoiner", () => {
             item: createTestEvent(
               "2025-08-13T10:00:00Z",
               {},
-              { request_id: "req1" },
+              { request_id: "req1" }
             ),
             delay: 10,
           },
@@ -2326,7 +2325,7 @@ describe("StreamJoiner", () => {
             item: createTestEvent(
               "2025-08-13T10:00:02Z",
               {},
-              { request_id: "req2" },
+              { request_id: "req2" }
             ),
             delay: 20,
           }, // No right match
@@ -2337,7 +2336,7 @@ describe("StreamJoiner", () => {
             item: createTestEvent(
               "2025-08-13T10:00:01Z",
               {},
-              { request_id: "req1" },
+              { request_id: "req1" }
             ),
             delay: 50,
           },
@@ -2351,14 +2350,14 @@ describe("StreamJoiner", () => {
           joiner,
           leftStream,
           rightStream,
-          false,
+          false
         ); // Use batch mode for final state
 
         expect(results).toHaveLength(2);
 
         // First correlation (req1) should be complete
         const req1Result = results.find(
-          (r) => r.correlation.joinValue === "req1",
+          (r) => r.correlation.joinValue === "req1"
         );
         expect(req1Result).toBeDefined();
         expect(req1Result!.correlation.metadata.completeness).toBe("complete");
@@ -2366,7 +2365,7 @@ describe("StreamJoiner", () => {
 
         // Second correlation (req2) should be partial (left-only)
         const req2Result = results.find(
-          (r) => r.correlation.joinValue === "req2",
+          (r) => r.correlation.joinValue === "req2"
         );
         expect(req2Result).toBeDefined();
         expect(req2Result!.correlation.metadata.completeness).toBe("partial");
@@ -2389,7 +2388,7 @@ describe("StreamJoiner", () => {
             item: createTestEvent(
               "2025-08-13T10:00:00Z",
               {},
-              { request_id: "req1" },
+              { request_id: "req1" }
             ),
             delay: 10,
           },
@@ -2400,7 +2399,7 @@ describe("StreamJoiner", () => {
             item: createTestEvent(
               "2025-08-13T10:00:01Z",
               {},
-              { request_id: "req1" },
+              { request_id: "req1" }
             ),
             delay: 150,
           }, // Late arrival
@@ -2413,7 +2412,7 @@ describe("StreamJoiner", () => {
           joiner,
           leftStream,
           rightStream,
-          false,
+          false
         ); // Use batch mode
 
         // Should emit complete correlation (current batch behavior includes late arrivals)
@@ -2436,7 +2435,7 @@ describe("StreamJoiner", () => {
             item: createTestEvent(
               "2025-08-13T10:00:00Z",
               {},
-              { request_id: "req1" },
+              { request_id: "req1" }
             ),
             delay: 10,
           },
@@ -2447,7 +2446,7 @@ describe("StreamJoiner", () => {
             item: createTestEvent(
               "2025-08-13T10:00:01Z",
               {},
-              { request_id: "req1" },
+              { request_id: "req1" }
             ),
             delay: 80,
           }, // Within tolerance
@@ -2459,7 +2458,7 @@ describe("StreamJoiner", () => {
         const results = await collectCorrelationsWithTiming(
           joiner,
           leftStream,
-          rightStream,
+          rightStream
         );
 
         expect(results).toHaveLength(1);
@@ -2481,7 +2480,7 @@ describe("StreamJoiner", () => {
             item: createTestEvent(
               "2025-08-13T10:00:00Z",
               {},
-              { request_id: "req1" },
+              { request_id: "req1" }
             ),
             delay: 10,
           },
@@ -2492,7 +2491,7 @@ describe("StreamJoiner", () => {
             item: createTestEvent(
               "2025-08-13T10:00:01Z",
               {},
-              { request_id: "req1" },
+              { request_id: "req1" }
             ),
             delay: 100,
           }, // Outside tolerance
@@ -2504,7 +2503,7 @@ describe("StreamJoiner", () => {
         const results = await collectCorrelationsWithTiming(
           joiner,
           leftStream,
-          rightStream,
+          rightStream
         );
 
         // Should not correlate due to late arrival
@@ -2520,7 +2519,7 @@ describe("StreamJoiner", () => {
             item: createTestEvent(
               "2025-08-13T10:00:02Z",
               {},
-              { request_id: "req1" },
+              { request_id: "req1" }
             ),
             delay: 10,
           }, // Later timestamp, arrives first
@@ -2528,7 +2527,7 @@ describe("StreamJoiner", () => {
             item: createTestEvent(
               "2025-08-13T10:00:00Z",
               {},
-              { request_id: "req2" },
+              { request_id: "req2" }
             ),
             delay: 20,
           }, // Earlier timestamp, arrives second
@@ -2539,7 +2538,7 @@ describe("StreamJoiner", () => {
             item: createTestEvent(
               "2025-08-13T10:00:01Z",
               {},
-              { request_id: "req2" },
+              { request_id: "req2" }
             ),
             delay: 30,
           },
@@ -2547,7 +2546,7 @@ describe("StreamJoiner", () => {
             item: createTestEvent(
               "2025-08-13T10:00:03Z",
               {},
-              { request_id: "req1" },
+              { request_id: "req1" }
             ),
             delay: 40,
           },
@@ -2559,7 +2558,7 @@ describe("StreamJoiner", () => {
         const results = await collectCorrelationsWithTiming(
           joiner,
           leftStream,
-          rightStream,
+          rightStream
         );
 
         expect(results).toHaveLength(2);
@@ -2568,7 +2567,7 @@ describe("StreamJoiner", () => {
         const sortedResults = results.sort(
           (a, b) =>
             new Date(a.correlation.timestamp).getTime() -
-            new Date(b.correlation.timestamp).getTime(),
+            new Date(b.correlation.timestamp).getTime()
         );
 
         expect(sortedResults[0].correlation.joinValue).toBe("req2"); // Earlier timestamp
@@ -2588,18 +2587,24 @@ describe("StreamJoiner", () => {
         const numEvents = process.env.CI ? 200 : 500;
         const leftEvents = Array.from({ length: numEvents }, (_, i) => ({
           item: createTestEvent(
-            `2025-08-13T10:00:${String(Math.floor(i / 10)).padStart(2, "0")}.${String((i % 10) * 100).padStart(3, "0")}Z`,
+            `2025-08-13T10:00:${String(Math.floor(i / 10)).padStart(
+              2,
+              "0"
+            )}.${String((i % 10) * 100).padStart(3, "0")}Z`,
             { batch: `batch${Math.floor(i / 10)}` },
-            { request_id: `req${i}` },
+            { request_id: `req${i}` }
           ),
           delay: 1, // Very short delay for high frequency
         }));
 
         const rightEvents = Array.from({ length: numEvents }, (_, i) => ({
           item: createTestEvent(
-            `2025-08-13T10:00:${String(Math.floor(i / 10)).padStart(2, "0")}.${String((i % 10) * 100 + 50).padStart(3, "0")}Z`,
+            `2025-08-13T10:00:${String(Math.floor(i / 10)).padStart(
+              2,
+              "0"
+            )}.${String((i % 10) * 100 + 50).padStart(3, "0")}Z`,
             { batch: `batch${Math.floor(i / 10)}` },
-            { request_id: `req${i}` },
+            { request_id: `req${i}` }
           ),
           delay: 1,
         }));
@@ -2611,7 +2616,7 @@ describe("StreamJoiner", () => {
         const results = await collectCorrelationsWithTiming(
           joiner,
           leftStream,
-          rightStream,
+          rightStream
         );
         const totalTime = Date.now() - startTime;
 
@@ -2621,8 +2626,8 @@ describe("StreamJoiner", () => {
         // All correlations should be complete
         expect(
           results.every(
-            (r) => r.correlation.metadata.completeness === "complete",
-          ),
+            (r) => r.correlation.metadata.completeness === "complete"
+          )
         ).toBe(true);
       }, 15000); // Increase timeout to 15 seconds for slower CI environments
 
@@ -2639,7 +2644,7 @@ describe("StreamJoiner", () => {
           item: createTestEvent(
             `2025-08-13T10:00:${String(i).padStart(3, "0")}Z`,
             {},
-            { request_id: `req${i}` },
+            { request_id: `req${i}` }
           ),
           delay: 1,
         }));
@@ -2648,7 +2653,7 @@ describe("StreamJoiner", () => {
           item: createTestEvent(
             `2025-08-13T10:00:${String(i + 300).padStart(3, "0")}Z`,
             {},
-            { request_id: `req${i}` },
+            { request_id: `req${i}` }
           ),
           delay: 1,
         }));
@@ -2660,15 +2665,15 @@ describe("StreamJoiner", () => {
         const results = await collectCorrelationsWithTiming(
           joiner,
           leftStream,
-          rightStream,
+          rightStream
         );
 
         // All events should correlate successfully
         expect(results.length).toBe(numEvents);
         expect(
           results.every(
-            (r) => r.correlation.metadata.completeness === "complete",
-          ),
+            (r) => r.correlation.metadata.completeness === "complete"
+          )
         ).toBe(true);
       }, 10000); // 10 second timeout for CI environments
 
@@ -2680,7 +2685,7 @@ describe("StreamJoiner", () => {
           item: createTestEvent(
             `2025-08-13T10:00:${String(i).padStart(2, "0")}Z`,
             {},
-            { request_id: `req${i}` },
+            { request_id: `req${i}` }
           ),
           delay: 1, // Fast production
         }));
@@ -2689,7 +2694,7 @@ describe("StreamJoiner", () => {
           item: createTestEvent(
             `2025-08-13T10:00:${String(i + 60).padStart(2, "0")}Z`,
             {},
-            { request_id: `req${i}` },
+            { request_id: `req${i}` }
           ),
           delay: 1, // Fast production
         }));
@@ -2715,7 +2720,7 @@ describe("StreamJoiner", () => {
 
         // Should handle backpressure without dropping events
         expect(
-          results.every((r) => r.metadata.completeness === "complete"),
+          results.every((r) => r.metadata.completeness === "complete")
         ).toBe(true);
       });
     });
@@ -2730,7 +2735,7 @@ describe("StreamJoiner", () => {
             item: createTestEvent(
               "2025-08-13T10:00:00Z",
               {},
-              { request_id: "req1" },
+              { request_id: "req1" }
             ),
             delay: 10,
           },
@@ -2738,7 +2743,7 @@ describe("StreamJoiner", () => {
             item: createTestEvent(
               "2025-08-13T10:00:01Z",
               {},
-              { request_id: "req2" },
+              { request_id: "req2" }
             ),
             delay: 20,
           },
@@ -2750,7 +2755,7 @@ describe("StreamJoiner", () => {
             item: createTestEvent(
               "2025-08-13T10:00:02Z",
               {},
-              { request_id: "req1" },
+              { request_id: "req1" }
             ),
             delay: 30,
           },
@@ -2758,7 +2763,7 @@ describe("StreamJoiner", () => {
             item: createTestEvent(
               "2025-08-13T10:00:03Z",
               {},
-              { request_id: "req2" },
+              { request_id: "req2" }
             ),
             delay: 40,
           },
@@ -2766,7 +2771,7 @@ describe("StreamJoiner", () => {
             item: createTestEvent(
               "2025-08-13T10:00:04Z",
               {},
-              { request_id: "req3" },
+              { request_id: "req3" }
             ),
             delay: 50,
           }, // No left match
@@ -2778,7 +2783,7 @@ describe("StreamJoiner", () => {
         const results = await collectCorrelationsWithTiming(
           joiner,
           leftStream,
-          rightStream,
+          rightStream
         );
 
         expect(results).toHaveLength(2); // Only req1 and req2 correlate
@@ -2788,7 +2793,7 @@ describe("StreamJoiner", () => {
 
         // req3 should not appear since it has no left match
         expect(
-          results.find((r) => r.correlation.joinValue === "req3"),
+          results.find((r) => r.correlation.joinValue === "req3")
         ).toBeUndefined();
       });
 
@@ -2801,7 +2806,7 @@ describe("StreamJoiner", () => {
             item: createTestEvent(
               "2025-08-13T10:00:00Z",
               {},
-              { request_id: "req1" },
+              { request_id: "req1" }
             ),
             delay: 10,
           },
@@ -2810,7 +2815,7 @@ describe("StreamJoiner", () => {
         const results = await collectCorrelationsWithTiming(
           joiner,
           leftStream,
-          rightStream,
+          rightStream
         );
 
         expect(results).toHaveLength(0); // No correlations possible
@@ -2829,7 +2834,7 @@ describe("StreamJoiner", () => {
             item: createTestEvent(
               "2025-08-13T10:00:00Z",
               {},
-              { request_id: "req1" },
+              { request_id: "req1" }
             ),
             delay: 10,
           },
@@ -2838,7 +2843,7 @@ describe("StreamJoiner", () => {
             item: createTestEvent(
               "2025-08-13T10:01:00Z",
               {},
-              { request_id: "req2" },
+              { request_id: "req2" }
             ),
             delay: 100,
           },
@@ -2849,7 +2854,7 @@ describe("StreamJoiner", () => {
             item: createTestEvent(
               "2025-08-13T10:00:01Z",
               {},
-              { request_id: "req1" },
+              { request_id: "req1" }
             ),
             delay: 50,
           },
@@ -2858,7 +2863,7 @@ describe("StreamJoiner", () => {
             item: createTestEvent(
               "2025-08-13T10:01:05Z",
               {},
-              { request_id: "req2" },
+              { request_id: "req2" }
             ),
             delay: 150,
           },
@@ -2870,21 +2875,21 @@ describe("StreamJoiner", () => {
         const results = await collectCorrelationsWithTiming(
           joiner,
           leftStream,
-          rightStream,
+          rightStream
         );
 
         expect(results).toHaveLength(2);
 
         // req1 should correlate (within window)
         const req1Result = results.find(
-          (r) => r.correlation.joinValue === "req1",
+          (r) => r.correlation.joinValue === "req1"
         );
         expect(req1Result).toBeDefined();
         expect(req1Result!.correlation.events).toHaveLength(2);
 
         // req2 should also correlate despite time gap
         const req2Result = results.find(
-          (r) => r.correlation.joinValue === "req2",
+          (r) => r.correlation.joinValue === "req2"
         );
         expect(req2Result).toBeDefined();
         expect(req2Result!.correlation.events).toHaveLength(2);
@@ -2899,7 +2904,7 @@ describe("StreamJoiner", () => {
             item: createTestEvent(
               "2025-08-13T10:00:00Z",
               { sequence: "1" },
-              { request_id: "req1" },
+              { request_id: "req1" }
             ),
             delay: 10,
           },
@@ -2907,7 +2912,7 @@ describe("StreamJoiner", () => {
             item: createTestEvent(
               "2025-08-13T10:00:01Z",
               { sequence: "2" },
-              { request_id: "req1" },
+              { request_id: "req1" }
             ),
             delay: 15,
           },
@@ -2915,7 +2920,7 @@ describe("StreamJoiner", () => {
             item: createTestEvent(
               "2025-08-13T10:00:02Z",
               { sequence: "3" },
-              { request_id: "req1" },
+              { request_id: "req1" }
             ),
             delay: 20,
           },
@@ -2926,7 +2931,7 @@ describe("StreamJoiner", () => {
             item: createTestEvent(
               "2025-08-13T10:00:03Z",
               { sequence: "4" },
-              { request_id: "req1" },
+              { request_id: "req1" }
             ),
             delay: 25,
           },
@@ -2934,7 +2939,7 @@ describe("StreamJoiner", () => {
             item: createTestEvent(
               "2025-08-13T10:00:04Z",
               { sequence: "5" },
-              { request_id: "req1" },
+              { request_id: "req1" }
             ),
             delay: 30,
           },
@@ -2947,7 +2952,7 @@ describe("StreamJoiner", () => {
           joiner,
           leftStream,
           rightStream,
-          false,
+          false
         ); // Use batch mode
 
         expect(results).toHaveLength(1); // One correlation for req1
@@ -2955,7 +2960,7 @@ describe("StreamJoiner", () => {
 
         // Events should be sorted by timestamp
         const timestamps = results[0].correlation.events.map(
-          (e: any) => e.timestamp,
+          (e: any) => e.timestamp
         );
         const sortedTimestamps = [...timestamps].sort();
         expect(timestamps).toEqual(sortedTimestamps);
@@ -2970,7 +2975,7 @@ describe("StreamJoiner", () => {
             item: createTestEvent(
               "2025-08-13T10:00:00Z",
               { type: "request" },
-              { request_id: "req1" },
+              { request_id: "req1" }
             ),
             delay: 5,
           },
@@ -2978,7 +2983,7 @@ describe("StreamJoiner", () => {
             item: createTestEvent(
               "2025-08-13T10:00:02Z",
               { type: "request" },
-              { request_id: "req2" },
+              { request_id: "req2" }
             ),
             delay: 8,
           },
@@ -2986,7 +2991,7 @@ describe("StreamJoiner", () => {
             item: createTestEvent(
               "2025-08-13T10:00:04Z",
               { type: "request" },
-              { request_id: "req3" },
+              { request_id: "req3" }
             ),
             delay: 12,
           },
@@ -2994,7 +2999,7 @@ describe("StreamJoiner", () => {
             item: createTestEvent(
               "2025-08-13T10:00:06Z",
               { type: "request" },
-              { request_id: "req4" },
+              { request_id: "req4" }
             ),
             delay: 15,
           },
@@ -3005,7 +3010,7 @@ describe("StreamJoiner", () => {
             item: createTestEvent(
               "2025-08-13T10:00:07Z",
               { type: "response" },
-              { request_id: "req4" },
+              { request_id: "req4" }
             ),
             delay: 6,
           },
@@ -3013,7 +3018,7 @@ describe("StreamJoiner", () => {
             item: createTestEvent(
               "2025-08-13T10:00:01Z",
               { type: "response" },
-              { request_id: "req1" },
+              { request_id: "req1" }
             ),
             delay: 9,
           },
@@ -3021,7 +3026,7 @@ describe("StreamJoiner", () => {
             item: createTestEvent(
               "2025-08-13T10:00:05Z",
               { type: "response" },
-              { request_id: "req3" },
+              { request_id: "req3" }
             ),
             delay: 13,
           },
@@ -3029,7 +3034,7 @@ describe("StreamJoiner", () => {
             item: createTestEvent(
               "2025-08-13T10:00:03Z",
               { type: "response" },
-              { request_id: "req2" },
+              { request_id: "req2" }
             ),
             delay: 16,
           },
@@ -3041,7 +3046,7 @@ describe("StreamJoiner", () => {
         const results = await collectCorrelationsWithTiming(
           joiner,
           leftStream,
-          rightStream,
+          rightStream
         );
 
         expect(results).toHaveLength(4);
