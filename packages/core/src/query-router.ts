@@ -998,6 +998,14 @@ export class QueryRouter extends EventEmitter {
       return;
     }
     
+    // IMPORTANT: Clear any existing abort signal from the adapter that may have been set
+    // when we cancelled the original stream. This prevents the batch queries from being
+    // immediately aborted.
+    if ((adapter as any).abortSignal) {
+      optimizerLogger.debug("Clearing existing abort signal from adapter before batch queries");
+      (adapter as any).abortSignal = null;
+    }
+    
     // Format time bounds if available
     let timeFilter = '';
     if (optimization.timeBounds) {
@@ -1100,21 +1108,48 @@ export class QueryRouter extends EventEmitter {
         const batchTimeout = 30000; // 30 second timeout per batch
         const startTime = Date.now();
         
-        for await (const event of batchStream) {
-          batchEvents.push(event);
-          
-          // Check for timeout
-          if (Date.now() - startTime > batchTimeout) {
-            routerLogger.warn({ 
-              batchNumber: batchIndex + 1, 
-              eventsCollected: batchEvents.length,
-              timeoutMs: batchTimeout 
-            }, "Batch timed out, continuing with partial results");
-            break;
+        optimizerLogger.debug({ 
+          batchNumber: batchIndex + 1,
+          startingIteration: true
+        }, "Starting to iterate over batch stream");
+        
+        try {
+          for await (const event of batchStream) {
+            batchEvents.push(event);
+            
+            // Log first event to confirm stream is working
+            if (batchEvents.length === 1) {
+              optimizerLogger.debug({ 
+                batchNumber: batchIndex + 1,
+                firstEventReceived: true
+              }, "First event received from batch stream");
+            }
+            
+            // Check for timeout
+            if (Date.now() - startTime > batchTimeout) {
+              routerLogger.warn({ 
+                batchNumber: batchIndex + 1, 
+                eventsCollected: batchEvents.length,
+                timeoutMs: batchTimeout 
+              }, "Batch timed out, continuing with partial results");
+              break;
+            }
           }
+        } catch (iterError) {
+          optimizerLogger.error({ 
+            batchNumber: batchIndex + 1,
+            error: iterError,
+            errorMessage: iterError instanceof Error ? iterError.message : String(iterError),
+            eventsCollectedSoFar: batchEvents.length
+          }, "Error while iterating batch stream");
+          // Return what we have so far
         }
         
-        routerLogger.debug({ batchNumber: batchIndex + 1, eventsFound: batchEvents.length }, "Batch completed");
+        routerLogger.debug({ 
+          batchNumber: batchIndex + 1, 
+          eventsFound: batchEvents.length,
+          duration: Date.now() - startTime
+        }, "Batch completed");
         return batchEvents;
         
       } catch (error) {
