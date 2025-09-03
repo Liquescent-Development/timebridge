@@ -1000,10 +1000,16 @@ export class QueryRouter extends EventEmitter {
     
     // IMPORTANT: Clear any existing abort signal from the adapter that may have been set
     // when we cancelled the original stream. This prevents the batch queries from being
-    // immediately aborted.
+    // immediately aborted. We need to completely remove it, not just null it, because
+    // the Graylog adapter checks if it exists and if it's aborted.
     if ((adapter as any).abortSignal) {
-      optimizerLogger.debug("Clearing existing abort signal from adapter before batch queries");
-      (adapter as any).abortSignal = null;
+      optimizerLogger.debug({ 
+        hadAbortSignal: true,
+        wasAborted: (adapter as any).abortSignal.aborted 
+      }, "Removing existing abort signal from adapter before batch queries");
+      
+      // Delete the property entirely so the adapter won't find it
+      delete (adapter as any).abortSignal;
     }
     
     // Format time bounds if available
