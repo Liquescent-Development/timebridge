@@ -1,5 +1,5 @@
 // Import from local parser types to avoid circular dependency
-import { ParsedQuery, StreamQuery, JoinType } from "./parser";
+import { ParsedQuery, StreamQuery, JoinType, EventSequence } from "./parser";
 
 // Type definition for the generated parser
 interface GeneratedParser {
@@ -7,7 +7,7 @@ interface GeneratedParser {
 }
 
 interface ParseResult {
-  type?: 'direct' | 'correlation' | 'aggregation';
+  type?: 'direct' | 'correlation' | 'aggregation' | 'pattern';
   // For direct queries
   stream?: StreamQuery;
   // For correlation queries
@@ -25,6 +25,8 @@ interface ParseResult {
   function?: string;
   groupBy?: string[];
   query?: ParseResult;  // Nested query for aggregations
+  // For pattern queries
+  sequence?: any;  // Will be properly typed from the parser
 }
 
 interface JoinInfo {
@@ -69,6 +71,7 @@ interface ParsedQueryExtended extends ParsedQuery {
   labelMappings?: LabelMapping[];
   filter?: string;
   additionalStreams?: StreamQuery[];
+  sequence?: EventSequence;
 }
 
 export class PeggyQueryParser {
@@ -92,6 +95,19 @@ export class PeggyQueryParser {
   }
 
   private transformParseResult(result: ParseResult): ParsedQueryExtended {
+    // Handle pattern queries
+    if (result.type === 'pattern') {
+      return {
+        type: 'pattern' as any,
+        sequence: result.sequence,
+        // These are required by the interface but not used for patterns
+        leftStream: {} as any,
+        rightStream: null as any,
+        joinType: 'and' as JoinType,
+        joinKeys: [],
+      } as any;
+    }
+
     // Handle aggregation queries
     if (result.type === 'aggregation') {
       // Recursively transform the inner query

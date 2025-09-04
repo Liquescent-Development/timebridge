@@ -1,5 +1,5 @@
 import { TimeQLToSQLGenerator, SQLGeneratorOptions } from './timeql-to-sql';
-import { ParsedQuery, JoinType } from './types';
+import { ParsedQuery, JoinType, EventSequence } from './types';
 
 describe('TimeQLToSQLGenerator', () => {
   let generator: TimeQLToSQLGenerator;
@@ -767,6 +767,198 @@ describe('TimeQLToSQLGenerator', () => {
       const sql = generator.generateSQL(query);
       expect(sql).toContain('INNER JOIN');
       expect(sql).not.toContain('BETWEEN');
+    });
+  });
+
+  describe('Pattern Matching SQL Generation', () => {
+    beforeEach(() => {
+      generator = new TimeQLToSQLGenerator({
+        tableName: 'events',
+        limit: 100
+      });
+    });
+
+    it('should generate SQL for "follows" pattern', () => {
+      const query: ParsedQuery = {
+        type: 'pattern',
+        sequence: {
+          first: {
+            source: 'auth',
+            selector: '{action="login"}',
+            timeRange: '1h'
+          },
+          operator: 'follows',
+          second: {
+            source: 'api',
+            selector: '{endpoint="/dashboard"}',
+            timeRange: '1h'
+          },
+          constraint: {
+            type: 'within',
+            duration: '5m'
+          }
+        },
+        leftStream: { source: 'auth', selector: '' },
+        joinType: 'inner',
+        joinKeys: []
+      };
+
+      const sql = generator.generateSQL(query);
+      
+      expect(sql).toContain('WITH pattern_events AS');
+      expect(sql).toContain('LAG(CASE WHEN');
+      expect(sql).toContain("source = 'auth'");
+      expect(sql).toContain("json_extract_string(labels, '$.action') = 'login'");
+      expect(sql).toContain("source = 'api'");
+      expect(sql).toContain("json_extract_string(labels, '$.endpoint') = '/dashboard'");
+      expect(sql).toContain('event_type = \'second\'');
+      expect(sql).toContain('prev_first_timestamp IS NOT NULL');
+      expect(sql).toContain('LIMIT 100');
+    });
+
+    it('should generate SQL for "precedes" pattern', () => {
+      const query: ParsedQuery = {
+        type: 'pattern',
+        sequence: {
+          first: {
+            source: 'database',
+            selector: '{query="UPDATE"}',
+            timeRange: '30m'
+          },
+          operator: 'precedes',
+          second: {
+            source: 'cache',
+            selector: '{action="invalidate"}',
+            timeRange: '30m'
+          }
+        },
+        leftStream: { source: 'database', selector: '' },
+        joinType: 'inner',
+        joinKeys: []
+      };
+
+      const sql = generator.generateSQL(query);
+      
+      expect(sql).toContain('WITH pattern_events AS');
+      expect(sql).toContain('LEAD(CASE WHEN');
+      expect(sql).toContain("source = 'database'");
+      expect(sql).toContain("json_extract_string(labels, '$.query') = 'UPDATE'");
+      expect(sql).toContain("source = 'cache'");
+      expect(sql).toContain('event_type = \'first\'');
+    });
+
+    it('should generate SQL for "before" pattern', () => {
+      const query: ParsedQuery = {
+        type: 'pattern',
+        sequence: {
+          first: {
+            source: 'errors',
+            selector: '{level="critical"}',
+            timeRange: '1h'
+          },
+          operator: 'before',
+          second: {
+            source: 'alerts',
+            selector: '{type="pagerduty"}',
+            timeRange: '1h'
+          }
+        },
+        leftStream: { source: 'errors', selector: '' },
+        joinType: 'inner',
+        joinKeys: []
+      };
+
+      const sql = generator.generateSQL(query);
+      
+      expect(sql).toContain('SELECT *');
+      expect(sql).toContain('FROM events a');
+      expect(sql).toContain("source = 'errors'");
+      expect(sql).toContain('EXISTS (');
+      expect(sql).toContain('b.timestamp > a.timestamp');
+    });
+
+    it('should generate SQL for "after" pattern', () => {
+      const query: ParsedQuery = {
+        type: 'pattern',
+        sequence: {
+          first: {
+            source: 'deploy',
+            selector: '{environment="production"}',
+            timeRange: '2h'
+          },
+          operator: 'after',
+          second: {
+            source: 'tests',
+            selector: '{status="passed"}',
+            timeRange: '2h'
+          }
+        },
+        leftStream: { source: 'deploy', selector: '' },
+        joinType: 'inner',
+        joinKeys: []
+      };
+
+      const sql = generator.generateSQL(query);
+      
+      expect(sql).toContain('SELECT *');
+      expect(sql).toContain('FROM events a');
+      expect(sql).toContain("source = 'deploy'");
+      expect(sql).toContain('EXISTS (');
+      expect(sql).toContain('b.timestamp < a.timestamp');
+    });
+
+    it('should handle temporal constraints', () => {
+      const query: ParsedQuery = {
+        type: 'pattern',
+        sequence: {
+          first: {
+            source: 'request',
+            selector: '{method="POST"}',
+            timeRange: '10m'
+          },
+          operator: 'follows',
+          second: {
+            source: 'response',
+            selector: '{status="200"}',
+            timeRange: '10m'
+          },
+          constraint: {
+            type: 'within',
+            duration: '30s'
+          }
+        },
+        leftStream: { source: 'request', selector: '' },
+        joinType: 'inner',
+        joinKeys: []
+      };
+
+      const sql = generator.generateSQL(query);
+      
+      expect(sql).toContain('ABS(EXTRACT(EPOCH FROM (timestamp - prev_first_timestamp))) <= 30');
+    });
+
+    it('should handle patterns without selectors', () => {
+      const query: ParsedQuery = {
+        type: 'pattern',
+        sequence: {
+          first: {
+            source: 'events',
+            selector: '{}'
+          },
+          operator: 'follows',
+          second: {
+            source: 'events',
+            selector: '{}'
+          }
+        },
+        leftStream: { source: 'events', selector: '' },
+        joinType: 'inner',
+        joinKeys: []
+      };
+
+      const sql = generator.generateSQL(query);
+      
+      expect(sql).toContain('1=1'); // Default condition when no selectors
     });
   });
 });
