@@ -575,9 +575,9 @@ export class TimeQLToSQLGenerator {
       : `json_extract_string(r.labels, '$.${joinField}')`;
     
     let sql = 'SELECT\n';
-    sql += `  ${leftJoinExpr} as correlation_id,\n`;  // Use join field value as correlation_id
+    sql += `  COALESCE(${leftJoinExpr}, 'unmatched-' || l.timestamp) as correlation_id,\n`;  // Use join field value as correlation_id
     sql += `  '${joinField}' as join_key,\n`;
-    sql += `  ${leftJoinExpr} as join_value,\n`;
+    sql += `  COALESCE(${leftJoinExpr}, 'unmatched') as join_value,\n`;
     sql += '  l.timestamp as left_timestamp,\n';
     sql += '  r.timestamp as right_timestamp,\n';
     sql += '  l.message as left_message,\n';
@@ -586,8 +586,8 @@ export class TimeQLToSQLGenerator {
     sql += '  r.source as right_source,\n';
     sql += '  l.labels as left_labels,\n';
     sql += '  r.labels as right_labels,\n';
-    sql += '  LEAST(l.timestamp, r.timestamp) as window_start,\n';
-    sql += '  GREATEST(l.timestamp, r.timestamp) as window_end\n';
+    sql += '  COALESCE(LEAST(l.timestamp, r.timestamp), l.timestamp) as window_start,\n';
+    sql += '  COALESCE(GREATEST(l.timestamp, r.timestamp), l.timestamp) as window_end\n';
     sql += 'FROM left_stream l\n';
     
     // Handle anti-join (UNLESS)
