@@ -66,13 +66,129 @@ export class TimeQLToSQLGenerator {
    * Generate SQL from a parsed TimeQL query
    */
   generateSQL(query: ParsedQuery): string {
-    // Use the new SQLBuilder for structured SQL generation
-    const sqlQuery = this.sqlBuilder.buildCorrelationQuery(query);
-    const sql = this.sqlBuilder.toSQL(sqlQuery);
+    // Handle different query types
+    if (query.type === 'aggregation') {
+      return this.generateAggregationSQL(query);
+    } else if (query.type === 'database') {
+      return this.generateDatabaseSQL(query);
+    } else {
+      // Use the existing SQLBuilder for correlation queries
+      const sqlQuery = this.sqlBuilder.buildCorrelationQuery(query);
+      const sql = this.sqlBuilder.toSQL(sqlQuery);
+      
+      // Add LIMIT if specified
+      if (this.options.limit) {
+        return sql + `\nLIMIT ${this.options.limit}`;
+      }
+      
+      return sql;
+    }
+  }
+  
+  /**
+   * Generate SQL for database queries (events{...}[...])
+   */
+  private generateDatabaseSQL(query: ParsedQuery): string {
+    const stream = query.leftStream;  // For direct queries, we use leftStream
+    let sql = `SELECT * FROM ${this.options.tableName}`;
+    const conditions = [];
+    
+    // Add time range filter
+    if (stream.timeRange) {
+      const timeWindow = this.parseTimeWindow(stream.timeRange);
+      if (timeWindow) {
+        conditions.push(`timestamp >= CURRENT_TIMESTAMP - INTERVAL '${timeWindow}'`);
+      }
+    }
+    
+    // Parse label selectors if present
+    if (stream.selectorParsed?.matchers) {
+      for (const matcher of stream.selectorParsed.matchers) {
+        const field = `json_extract_string(labels, '$.${matcher.label}')`;
+        const value = matcher.value;
+        
+        switch(matcher.op) {
+          case '=':
+            conditions.push(`${field} = '${value}'`);
+            break;
+          case '!=':
+            conditions.push(`${field} != '${value}'`);
+            break;
+          case '=~':
+            conditions.push(`regexp_matches(${field}, '${value}')`);
+            break;
+          case '!~':
+            conditions.push(`NOT regexp_matches(${field}, '${value}')`);
+            break;
+        }
+      }
+    }
+    
+    if (conditions.length > 0) {
+      sql += ` WHERE ${conditions.join(' AND ')}`;
+    }
     
     // Add LIMIT if specified
     if (this.options.limit) {
-      return sql + `\nLIMIT ${this.options.limit}`;
+      sql += ` LIMIT ${this.options.limit}`;
+    }
+    
+    return sql;
+  }
+  
+  /**
+   * Generate SQL for aggregation queries
+   */
+  private generateAggregationSQL(query: ParsedQuery): string {
+    // First generate SQL for the inner query
+    const innerSQL = query.query ? this.generateSQL(query.query) : 'SELECT * FROM events';
+    
+    // Build aggregation SQL
+    const func = query.function || 'count';
+    const groupBy = query.groupBy || [];
+    
+    let sql = 'WITH inner_query AS (\n';
+    sql += `  ${innerSQL.replace(/\n/g, '\n  ')}\n`;
+    sql += ')\n';
+    
+    // Build SELECT clause based on aggregation function
+    const selectClauses = [];
+    
+    // Add group by columns
+    for (const col of groupBy) {
+      selectClauses.push(`json_extract_string(labels, '$.${col}') as ${col}`);
+    }
+    
+    // Add aggregation
+    switch(func) {
+      case 'sum':
+        selectClauses.push('SUM(value) as sum');
+        break;
+      case 'avg':
+        selectClauses.push('AVG(value) as avg');
+        break;
+      case 'count':
+        selectClauses.push('COUNT(*) as count');
+        break;
+      case 'min':
+        selectClauses.push('MIN(value) as min');
+        break;
+      case 'max':
+        selectClauses.push('MAX(value) as max');
+        break;
+      case 'rate':
+        // Rate calculation (events per second)
+        selectClauses.push('COUNT(*) / (MAX(timestamp) - MIN(timestamp)) as rate');
+        break;
+      default:
+        selectClauses.push('COUNT(*) as count');
+    }
+    
+    sql += `SELECT ${selectClauses.join(', ')}\n`;
+    sql += 'FROM inner_query';
+    
+    if (groupBy.length > 0) {
+      sql += '\nGROUP BY ' + groupBy.map((col: string) => `json_extract_string(labels, '$.${col}')`).join(', ');
     }
     
     return sql;

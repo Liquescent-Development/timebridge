@@ -2,10 +2,13 @@
 export type JoinType = "and" | "or" | "unless";
 
 export interface StreamQuery {
+  type?: 'database' | 'stream';  // Optional type to distinguish database vs stream queries
   source: string;
   selector: string;
   timeRange: string;
   alias?: string;
+  stream?: string;  // Optional stream name for source:stream syntax
+  selectorParsed?: any;  // Parsed selector for more complex queries
 }
 
 interface LabelMapping {
@@ -14,6 +17,7 @@ interface LabelMapping {
 }
 
 export interface ParsedQuery {
+  type?: 'direct' | 'correlation' | 'aggregation' | 'database';  // Query type
   leftStream: StreamQuery;
   rightStream: StreamQuery;
   joinType: JoinType;
@@ -28,6 +32,10 @@ export interface ParsedQuery {
   labelMappings?: Array<{ left: string; right: string }>;
   filter?: string;
   additionalStreams?: StreamQuery[];
+  // For aggregation queries
+  function?: string;
+  groupBy?: string[];
+  query?: ParsedQuery;  // Nested query for aggregations
 }
 
 interface ParsedQueryExtended extends ParsedQuery {

@@ -72,10 +72,12 @@ export interface StreamOptions {
 }
 
 export interface StreamQuery {
+  type?: 'database' | 'stream';  // Type to distinguish database vs stream queries
   source: string;
   stream?: string;  // Optional stream name for filtering
   selector: string;
   timeRange?: string;
+  selectorParsed?: any;  // Parsed selector for complex queries
 }
 
 export type JoinType = 'inner' | 'left' | 'anti' | 'and' | 'or' | 'unless';
@@ -86,6 +88,7 @@ export interface GroupingConfig {
 }
 
 export interface ParsedQuery {
+  type?: 'direct' | 'correlation' | 'aggregation' | 'database';  // Query type
   leftStream: StreamQuery;
   rightStream?: StreamQuery;  // Made optional for single-stream queries
   joinType: JoinType;
@@ -101,6 +104,10 @@ export interface ParsedQuery {
   filter?: string;
   additionalStreams?: StreamQuery[];
   metadata?: Record<string, any>;  // Added for query hints and other metadata
+  // For aggregation queries
+  function?: string;
+  groupBy?: string[];
+  query?: ParsedQuery;  // Nested query for aggregations
 }
 
 export interface DataSourceAdapter {

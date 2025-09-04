@@ -7,7 +7,7 @@ interface GeneratedParser {
 }
 
 interface ParseResult {
-  type?: 'direct' | 'correlation';
+  type?: 'direct' | 'correlation' | 'aggregation';
   // For direct queries
   stream?: StreamQuery;
   // For correlation queries
@@ -21,6 +21,10 @@ interface ParseResult {
   labelMappings?: LabelMapping[];
   filter?: string;
   additionalStreams?: StreamQuery[];
+  // For aggregation queries
+  function?: string;
+  groupBy?: string[];
+  query?: ParseResult;  // Nested query for aggregations
 }
 
 interface JoinInfo {
@@ -88,11 +92,33 @@ export class PeggyQueryParser {
   }
 
   private transformParseResult(result: ParseResult): ParsedQueryExtended {
+    // Handle aggregation queries
+    if (result.type === 'aggregation') {
+      // Recursively transform the inner query
+      const innerQuery = result.query ? this.transformParseResult(result.query) : null;
+      
+      return {
+        type: 'aggregation' as any,
+        function: result.function,
+        groupBy: result.groupBy || [],
+        query: innerQuery,
+        // These are required by the interface but not used for aggregations
+        leftStream: innerQuery?.leftStream || {} as any,
+        rightStream: null as any,
+        joinType: 'and' as JoinType,
+        joinKeys: [],
+      } as any;
+    }
+
     // Handle direct queries (single stream)
     if (result.type === 'direct' && result.stream) {
+      // Check if this is a database query
+      const isDatabase = result.stream.type === 'database' || result.stream.source === 'events';
+      
       // Return a special format for direct queries
       // We'll use leftStream for the single stream to maintain compatibility
       return {
+        type: isDatabase ? 'database' as any : 'direct' as any,
         leftStream: result.stream,
         rightStream: null as any, // No right stream for direct queries
         joinType: 'and' as JoinType, // Default, not used

@@ -2,6 +2,23 @@
 // A PromQL-inspired query language for log correlation and direct queries
 
 Query
+  = AggregationQuery
+  / CorrelationQuery
+  / DirectQuery
+
+// Aggregation query (e.g., sum by(service) (events[1h]))
+AggregationQuery
+  = func:AggregationFunc _ grouping:GroupingClause? _ "(" _ query:InnerQuery _ ")" {
+      return {
+        type: 'aggregation',
+        function: func,
+        groupBy: grouping || [],
+        query: query
+      };
+    }
+
+// Inner query for aggregations (can be direct or correlation)
+InnerQuery
   = CorrelationQuery
   / DirectQuery
 
@@ -49,6 +66,23 @@ JoinedStream
     }
 
 StreamExpr
+  = DatabaseExpr
+  / SourceStreamExpr
+
+// Query persisted data in DuckDB
+DatabaseExpr
+  = "events" selector:LabelSelector? _ "[" _ duration:Duration _ "]" {
+      return {
+        type: 'database',
+        source: 'events',  // Special source indicating persisted data
+        selector: selector ? selector.text : '{}',
+        timeRange: duration,
+        selectorParsed: selector ? selector.parsed : { type: 'labels', matchers: [] }
+      };
+    }
+
+// Query from external sources (existing behavior)
+SourceStreamExpr
   = source:DataSourceNameWithStream _ "(" _ selector:Selector _ ")" _ "[" _ duration:Duration _ "]" {
       // Check if source contains a colon for stream specification
       const colonIndex = source.indexOf(':');
@@ -386,6 +420,17 @@ UnquotedValue
 
 Number
   = [0-9]+ ("." [0-9]+)? { return text(); }
+
+// Aggregation functions
+AggregationFunc
+  = "sum" / "avg" / "min" / "max" / "count" 
+  / "rate" / "increase" / "topk" / "bottomk"
+
+// Grouping clause for aggregations (e.g., by(service, region))
+GroupingClause
+  = "by" _ "(" _ labels:LabelList _ ")" {
+      return labels;
+    }
 
 // Whitespace
 _ = [ \t\r\n]*

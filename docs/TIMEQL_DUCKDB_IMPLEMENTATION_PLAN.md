@@ -8,29 +8,29 @@ This implementation plan outlines the steps to enable TimeQL queries on persiste
 
 ### Grammar Extensions
 
-- [ ] **1.1** Extend TimeQL grammar to support database expressions
-  - [ ] Add `DatabaseExpr` rule for `events{...}[...]` syntax
-  - [ ] Add `LabelSelector` rules for Prometheus-style filters
-  - [ ] Add label operators (`=`, `!=`, `=~`, `!~`)
-  - [ ] Update `StreamExpr` to include `DatabaseExpr` as alternative
+- [x] **1.1** Extend TimeQL grammar to support database expressions
+  - [x] Add `DatabaseExpr` rule for `events{...}[...]` syntax
+  - [x] Add `LabelSelector` rules for Prometheus-style filters
+  - [x] Add label operators (`=`, `!=`, `=~`, `!~`)
+  - [x] Update `StreamExpr` to include `DatabaseExpr` as alternative
   - [ ] Test grammar with sample queries
 
 ### Parser Updates
 
-- [ ] **1.2** Update TimeQL parser to handle new AST nodes
-  - [ ] Create `DatabaseQuery` type in types.ts
-  - [ ] Add `parseDatabaseQuery` method to parser
-  - [ ] Handle label selector parsing
+- [x] **1.2** Update TimeQL parser to handle new AST nodes
+  - [x] Create `DatabaseQuery` type in types.ts
+  - [x] Add `parseDatabaseQuery` method to parser
+  - [x] Handle label selector parsing
   - [ ] Add unit tests for database query parsing
-  - [ ] Ensure backward compatibility with existing queries
+  - [x] Ensure backward compatibility with existing queries
 
 ### SQL Generation Basics
 
-- [ ] **1.3** Extend TimeQLToSQLGenerator for database queries
-  - [ ] Add `generateDatabaseSQL` method
-  - [ ] Implement label filter to SQL WHERE clause conversion
-  - [ ] Handle time range filters
-  - [ ] Support JSON field extraction for labels
+- [x] **1.3** Extend TimeQLToSQLGenerator for database queries
+  - [x] Add `generateDatabaseSQL` method
+  - [x] Implement label filter to SQL WHERE clause conversion
+  - [x] Handle time range filters
+  - [x] Support JSON field extraction for labels
   - [ ] Add SQL generation tests
 
 ## Phase 2: Persistence Layer (Week 1-2)
@@ -97,20 +97,20 @@ This implementation plan outlines the steps to enable TimeQL queries on persiste
 
 ### Grammar for Aggregations
 
-- [ ] **4.1** Add aggregation rules to grammar
-  - [ ] Add `AggregationExpr` rule
-  - [ ] Support functions: sum, avg, min, max, count
-  - [ ] Add `GroupingClause` for "by(labels)"
-  - [ ] Support nested aggregations
+- [x] **4.1** Add aggregation rules to grammar
+  - [x] Add `AggregationExpr` rule
+  - [x] Support functions: sum, avg, min, max, count
+  - [x] Add `GroupingClause` for "by(labels)"
+  - [x] Support nested aggregations
   - [ ] Test with complex aggregation queries
 
 ### Aggregation SQL Generation
 
-- [ ] **4.2** SQL generation for aggregations
-  - [ ] Map aggregation functions to SQL
-  - [ ] Handle GROUP BY clauses
+- [x] **4.2** SQL generation for aggregations
+  - [x] Map aggregation functions to SQL
+  - [x] Handle GROUP BY clauses
   - [ ] Support HAVING conditions
-  - [ ] Optimize for DuckDB columnar storage
+  - [x] Optimize for DuckDB columnar storage
   - [ ] Add aggregation-specific tests
 
 ### Time-Series Functions
