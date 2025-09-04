@@ -532,4 +532,209 @@ export class DuckDBExecutor extends EventEmitter {
     this.eventCount = 0;
     this.partitions.clear();
   }
+
+  /**
+   * Export the database to a file for persistence
+   * @param exportPath Path to export the database
+   */
+  async exportDatabase(exportPath: string): Promise<void> {
+    try {
+      // Ensure directory exists
+      const dir = path.dirname(exportPath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+
+      // Export as Parquet for efficient storage
+      const exportDir = exportPath.replace(/\.duckdb$/, '_export');
+      
+      duckdbLogger.info({ path: exportPath }, 'Exporting database');
+      
+      // Export the database using DuckDB's EXPORT command
+      await this.execute(`EXPORT DATABASE '${exportDir}' (FORMAT PARQUET)`);
+      
+      // Also create a backup of the database file if not in-memory
+      if (this.config.databasePath && this.config.databasePath !== ':memory:') {
+        fs.copyFileSync(this.config.databasePath, exportPath);
+      }
+      
+      duckdbLogger.info({ 
+        path: exportPath,
+        exportDir,
+        eventCount: this.eventCount,
+        partitions: Array.from(this.partitions)
+      }, 'Database exported successfully');
+      
+      this.emit('databaseExported', { path: exportPath, eventCount: this.eventCount });
+    } catch (error) {
+      duckdbLogger.error({ error }, 'Failed to export database');
+      throw new CorrelationError('Failed to export database', 'EXPORT_ERROR', error);
+    }
+  }
+
+  /**
+   * Import a previously exported database
+   * @param importPath Path to import the database from
+   */
+  async importDatabase(importPath: string): Promise<void> {
+    try {
+      duckdbLogger.info({ path: importPath }, 'Importing database');
+      
+      // Check if it's a direct database file or an export directory
+      if (importPath.endsWith('.duckdb') && fs.existsSync(importPath)) {
+        // Close current connection and database
+        await this.close();
+        
+        // Copy the database file
+        if (this.config.databasePath && this.config.databasePath !== ':memory:') {
+          fs.copyFileSync(importPath, this.config.databasePath);
+        }
+        
+        // Reinitialize with the imported database
+        await this.initialize();
+      } else {
+        // Import from Parquet export
+        const exportDir = importPath.replace(/\.duckdb$/, '_export');
+        if (fs.existsSync(exportDir)) {
+          await this.execute(`IMPORT DATABASE '${exportDir}'`);
+        } else {
+          throw new Error(`Import path not found: ${importPath}`);
+        }
+      }
+      
+      // Update statistics
+      const countResult = await this.execute('SELECT COUNT(*) as count FROM events');
+      this.eventCount = countResult?.[0]?.count || 0;
+      
+      duckdbLogger.info({ 
+        path: importPath,
+        eventCount: this.eventCount 
+      }, 'Database imported successfully');
+      
+      this.emit('databaseImported', { path: importPath, eventCount: this.eventCount });
+    } catch (error) {
+      duckdbLogger.error({ error }, 'Failed to import database');
+      throw new CorrelationError('Failed to import database', 'IMPORT_ERROR', error);
+    }
+  }
+
+  /**
+   * Persist the current in-memory database to disk
+   * @param persistPath Path where to persist the database
+   */
+  async persistToDisk(persistPath: string): Promise<void> {
+    if (this.config.databasePath && this.config.databasePath !== ':memory:') {
+      duckdbLogger.warn('Database is already persisted on disk');
+      return;
+    }
+
+    try {
+      const dir = path.dirname(persistPath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+
+      duckdbLogger.info({ path: persistPath }, 'Persisting in-memory database to disk');
+      
+      // Use DuckDB's COPY command to export to a new database
+      await this.execute(`COPY DATABASE TO '${persistPath}'`);
+      
+      duckdbLogger.info({ 
+        path: persistPath,
+        eventCount: this.eventCount 
+      }, 'Database persisted to disk');
+      
+      this.emit('databasePersisted', { path: persistPath, eventCount: this.eventCount });
+    } catch (error) {
+      duckdbLogger.error({ error }, 'Failed to persist database');
+      throw new CorrelationError('Failed to persist database', 'PERSIST_ERROR', error);
+    }
+  }
+
+  /**
+   * Load a persisted database from disk
+   * @param loadPath Path to the database file to load
+   */
+  async loadFromDisk(loadPath: string): Promise<void> {
+    if (!fs.existsSync(loadPath)) {
+      throw new CorrelationError('Database file not found', 'FILE_NOT_FOUND', { path: loadPath });
+    }
+
+    try {
+      duckdbLogger.info({ path: loadPath }, 'Loading database from disk');
+      
+      // Close current connection
+      await this.close();
+      
+      // Update config to use the file path
+      this.config.databasePath = loadPath;
+      
+      // Reinitialize with the loaded database
+      await this.initialize();
+      
+      // Update statistics
+      const countResult = await this.execute('SELECT COUNT(*) as count FROM events');
+      this.eventCount = countResult?.[0]?.count || 0;
+      
+      duckdbLogger.info({ 
+        path: loadPath,
+        eventCount: this.eventCount 
+      }, 'Database loaded from disk');
+      
+      this.emit('databaseLoaded', { path: loadPath, eventCount: this.eventCount });
+    } catch (error) {
+      duckdbLogger.error({ error }, 'Failed to load database');
+      throw new CorrelationError('Failed to load database', 'LOAD_ERROR', error);
+    }
+  }
+
+  /**
+   * Get metadata about the current database
+   */
+  async getDatabaseMetadata(): Promise<{
+    path: string;
+    isInMemory: boolean;
+    eventCount: number;
+    partitions: string[];
+    sizeBytes?: number;
+    tables: string[];
+  }> {
+    const tables = await this.execute(`
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = 'main'
+    `);
+    
+    let sizeBytes: number | undefined;
+    if (this.config.databasePath && this.config.databasePath !== ':memory:' && fs.existsSync(this.config.databasePath)) {
+      const stats = fs.statSync(this.config.databasePath);
+      sizeBytes = stats.size;
+    }
+    
+    return {
+      path: this.config.databasePath || ':memory:',
+      isInMemory: !this.config.databasePath || this.config.databasePath === ':memory:',
+      eventCount: this.eventCount,
+      partitions: Array.from(this.partitions),
+      sizeBytes,
+      tables: tables?.map((t: any) => t.table_name) || []
+    };
+  }
+
+  /**
+   * Close the database connection
+   */
+  async close(): Promise<void> {
+    if (this.conn) {
+      await new Promise<void>((resolve) => {
+        this.conn.close(() => resolve());
+      });
+    }
+    if (this.db) {
+      await new Promise<void>((resolve) => {
+        this.db.close(() => resolve());
+      });
+    }
+    this.isInitialized = false;
+  }
 }

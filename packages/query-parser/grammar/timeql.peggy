@@ -3,8 +3,42 @@
 
 Query
   = AggregationQuery
+  / PatternQuery
   / CorrelationQuery
   / DirectQuery
+
+// Pattern matching query (e.g., events{service="auth"}[5m] follows events{service="api"}[5m] within(30s))
+PatternQuery
+  = sequence:EventSequence {
+      return {
+        type: 'pattern',
+        sequence: sequence
+      };
+    }
+
+// Event sequence for pattern matching
+EventSequence
+  = first:StreamExpr _ op:PatternOperator _ second:StreamExpr constraint:TemporalConstraint? {
+      return {
+        first: first,
+        operator: op,
+        second: second,
+        constraint: constraint
+      };
+    }
+
+// Pattern operators
+PatternOperator
+  = "follows" { return 'follows'; }
+  / "precedes" { return 'precedes'; }
+  / "before" { return 'before'; }
+  / "after" { return 'after'; }
+
+// Temporal constraint for patterns
+TemporalConstraint
+  = __ "within" _ "(" _ duration:Duration _ ")" {
+      return { type: 'within', duration: duration };
+    }
 
 // Aggregation query (e.g., sum by(service) (events[1h]))
 AggregationQuery

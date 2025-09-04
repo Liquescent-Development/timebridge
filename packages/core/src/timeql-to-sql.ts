@@ -1,4 +1,4 @@
-import { ParsedQuery } from './types';
+import { ParsedQuery, StreamQuery } from './types';
 import { SQLBuilder } from './sql-builder';
 
 export interface SQLGeneratorOptions {
@@ -71,6 +71,8 @@ export class TimeQLToSQLGenerator {
       return this.generateAggregationSQL(query);
     } else if (query.type === 'database') {
       return this.generateDatabaseSQL(query);
+    } else if (query.type === 'pattern') {
+      return this.generatePatternSQL(query);
     } else {
       // Use the existing SQLBuilder for correlation queries
       const sqlQuery = this.sqlBuilder.buildCorrelationQuery(query);
@@ -656,5 +658,188 @@ export class TimeQLToSQLGenerator {
     }
     
     return sql;
+  }
+
+  /**
+   * Generate SQL for pattern matching queries
+   * Uses LAG/LEAD window functions to detect event sequences
+   */
+  private generatePatternSQL(query: ParsedQuery): string {
+    if (!query.sequence) {
+      throw new Error('Pattern query must have a sequence');
+    }
+
+    const { first, operator, second, constraint } = query.sequence;
+    const tableName = this.options.tableName || 'events';
+
+    // Build WHERE conditions for both events
+    const firstConditions = this.buildWhereConditions(first);
+    const secondConditions = this.buildWhereConditions(second);
+
+    let sql = '';
+
+    switch (operator) {
+      case 'follows':
+        // Event B follows Event A (A happens before B)
+        sql = `
+WITH pattern_events AS (
+  SELECT 
+    *,
+    CASE 
+      WHEN ${firstConditions} THEN 'first'
+      WHEN ${secondConditions} THEN 'second'
+      ELSE NULL
+    END as event_type,
+    LAG(CASE WHEN ${firstConditions} THEN timestamp END) OVER (ORDER BY timestamp) as prev_first_timestamp
+  FROM ${tableName}
+  WHERE (${firstConditions}) OR (${secondConditions})
+)
+SELECT 
+  *
+FROM pattern_events
+WHERE 
+  event_type = 'second' 
+  AND prev_first_timestamp IS NOT NULL`;
+        break;
+
+      case 'precedes':
+        // Event A precedes Event B (A happens before B, same as B follows A)
+        sql = `
+WITH pattern_events AS (
+  SELECT 
+    *,
+    CASE 
+      WHEN ${firstConditions} THEN 'first'
+      WHEN ${secondConditions} THEN 'second'
+      ELSE NULL
+    END as event_type,
+    LEAD(CASE WHEN ${secondConditions} THEN timestamp END) OVER (ORDER BY timestamp) as next_second_timestamp
+  FROM ${tableName}
+  WHERE (${firstConditions}) OR (${secondConditions})
+)
+SELECT 
+  *
+FROM pattern_events
+WHERE 
+  event_type = 'first' 
+  AND next_second_timestamp IS NOT NULL`;
+        break;
+
+      case 'before':
+        // All events A before any event B
+        sql = `
+SELECT *
+FROM ${tableName} a
+WHERE ${firstConditions}
+  AND EXISTS (
+    SELECT 1
+    FROM ${tableName} b
+    WHERE ${secondConditions}
+      AND b.timestamp > a.timestamp
+  )`;
+        break;
+
+      case 'after':
+        // All events A after any event B
+        sql = `
+SELECT *
+FROM ${tableName} a
+WHERE ${firstConditions}
+  AND EXISTS (
+    SELECT 1
+    FROM ${tableName} b
+    WHERE ${secondConditions}
+      AND b.timestamp < a.timestamp
+  )`;
+        break;
+    }
+
+    // Add temporal constraint if specified
+    if (constraint && constraint.type === 'within') {
+      const duration = constraint.duration;
+      if (operator === 'follows' || operator === 'precedes') {
+        sql += `
+  AND ABS(EXTRACT(EPOCH FROM (timestamp - prev_first_timestamp))) <= ${this.parseDurationToSeconds(duration)}`;
+      }
+    }
+
+    // Add LIMIT if specified
+    if (this.options.limit) {
+      sql += `
+LIMIT ${this.options.limit}`;
+    }
+
+    return sql.trim();
+  }
+
+  /**
+   * Parse duration string to seconds
+   */
+  private parseDurationToSeconds(duration: string): number {
+    const match = duration.match(/^(\d+)([smhd])$/);
+    if (!match) {
+      throw new Error(`Invalid duration: ${duration}`);
+    }
+
+    const value = parseInt(match[1], 10);
+    const unit = match[2];
+
+    switch (unit) {
+      case 's': return value;
+      case 'm': return value * 60;
+      case 'h': return value * 3600;
+      case 'd': return value * 86400;
+      default: throw new Error(`Invalid duration unit: ${unit}`);
+    }
+  }
+
+  /**
+   * Build WHERE conditions from a StreamQuery
+   */
+  private buildWhereConditions(stream: StreamQuery): string {
+    const conditions: string[] = [];
+    
+    // Add source filter if specified
+    if (stream.source && stream.source !== 'events') {
+      conditions.push(`source = '${stream.source}'`);
+    }
+
+    // Parse and add selector conditions
+    if (stream.selector && stream.selector !== '{}') {
+      const selectorConditions = this.parseSelectorToSQL(stream.selector);
+      if (selectorConditions) {
+        conditions.push(selectorConditions);
+      }
+    }
+
+    // Add time range if specified
+    if (stream.timeRange) {
+      conditions.push(`timestamp >= CURRENT_TIMESTAMP - INTERVAL '${stream.timeRange}'`);
+    }
+
+    return conditions.length > 0 ? conditions.join(' AND ') : '1=1';
+  }
+
+  /**
+   * Parse selector string to SQL conditions
+   */
+  private parseSelectorToSQL(selector: string): string {
+    // Remove curly braces
+    selector = selector.replace(/^{|}$/g, '').trim();
+    if (!selector) return '';
+
+    const conditions: string[] = [];
+    // Split by comma (simple parser for now)
+    const parts = selector.split(',');
+
+    for (const part of parts) {
+      const [key, value] = part.split('=').map(s => s.trim());
+      if (key && value) {
+        const cleanValue = value.replace(/["']/g, '');
+        conditions.push(`json_extract_string(labels, '$.${key}') = '${cleanValue}'`);
+      }
+    }
+
+    return conditions.join(' AND ');
   }
 }

@@ -24,6 +24,10 @@ export type { OptimizationHints, SourceStatistics } from "./query-optimizer";
 export { QueryRouter } from "./query-router";
 export type { QueryRouterConfig, RoutingDecision } from "./query-router";
 
+// TimeQL query client for persisted data
+export { TimeQLQueryClient, queryPersistedData } from "./timeql-query-client";
+export type { TimeQLQueryClientConfig, DatabaseInfo } from "./timeql-query-client";
+
 // Grafana support
 export { 
   GrafanaDataSourceProxy,

@@ -88,7 +88,7 @@ export interface GroupingConfig {
 }
 
 export interface ParsedQuery {
-  type?: 'direct' | 'correlation' | 'aggregation' | 'database';  // Query type
+  type?: 'direct' | 'correlation' | 'aggregation' | 'database' | 'pattern';  // Query type
   leftStream: StreamQuery;
   rightStream?: StreamQuery;  // Made optional for single-stream queries
   joinType: JoinType;
@@ -108,6 +108,18 @@ export interface ParsedQuery {
   function?: string;
   groupBy?: string[];
   query?: ParsedQuery;  // Nested query for aggregations
+  // For pattern queries
+  sequence?: EventSequence;
+}
+
+export interface EventSequence {
+  first: StreamQuery;
+  operator: 'follows' | 'precedes' | 'before' | 'after';
+  second: StreamQuery;
+  constraint?: {
+    type: 'within';
+    duration: string;
+  };
 }
 
 export interface DataSourceAdapter {

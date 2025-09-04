@@ -13,7 +13,7 @@ This implementation plan outlines the steps to enable TimeQL queries on persiste
   - [x] Add `LabelSelector` rules for Prometheus-style filters
   - [x] Add label operators (`=`, `!=`, `=~`, `!~`)
   - [x] Update `StreamExpr` to include `DatabaseExpr` as alternative
-  - [ ] Test grammar with sample queries
+  - [x] Test grammar with sample queries
 
 ### Parser Updates
 
@@ -21,7 +21,7 @@ This implementation plan outlines the steps to enable TimeQL queries on persiste
   - [x] Create `DatabaseQuery` type in types.ts
   - [x] Add `parseDatabaseQuery` method to parser
   - [x] Handle label selector parsing
-  - [ ] Add unit tests for database query parsing
+  - [x] Add unit tests for database query parsing
   - [x] Ensure backward compatibility with existing queries
 
 ### SQL Generation Basics
@@ -31,67 +31,67 @@ This implementation plan outlines the steps to enable TimeQL queries on persiste
   - [x] Implement label filter to SQL WHERE clause conversion
   - [x] Handle time range filters
   - [x] Support JSON field extraction for labels
-  - [ ] Add SQL generation tests
+  - [x] Add SQL generation tests
 
 ## Phase 2: Persistence Layer (Week 1-2)
 
 ### DuckDB Executor Enhancements
 
-- [ ] **2.1** Add persistence capabilities to DuckDBExecutor
-  - [ ] Add `exportDatabase(path)` method
-  - [ ] Add `importDatabase(path)` method  
-  - [ ] Implement `persistToDisk()` with configurable path
-  - [ ] Add `loadFromDisk()` for loading persisted DBs
-  - [ ] Handle database versioning/metadata
+- [x] **2.1** Add persistence capabilities to DuckDBExecutor
+  - [x] Add `exportDatabase(path)` method
+  - [x] Add `importDatabase(path)` method  
+  - [x] Implement `persistToDisk()` with configurable path
+  - [x] Add `loadFromDisk()` for loading persisted DBs
+  - [x] Handle database versioning/metadata
 
 ### Query Executor Updates
 
-- [ ] **2.2** Modify QueryRouter to support persistence
-  - [ ] Add `persistData` configuration option
-  - [ ] Add `persistPath` configuration option
-  - [ ] Implement post-query persistence logic
-  - [ ] Add `isPersisted` state tracking
-  - [ ] Emit persistence events for monitoring
+- [x] **2.2** Modify QueryRouter to support persistence
+  - [x] Add `persistData` configuration option
+  - [x] Add `persistPath` configuration option
+  - [x] Implement post-query persistence logic
+  - [x] Add `isPersisted` state tracking
+  - [x] Emit persistence events for monitoring
 
 ### Session Management
 
-- [ ] **2.3** Create DatabaseSessionManager
-  - [ ] Track active database sessions
-  - [ ] Implement session lifecycle (create/load/close)
-  - [ ] Add session metadata (created_at, last_accessed, size)
-  - [ ] Support multiple concurrent sessions
-  - [ ] Add cleanup for old sessions
+- [x] **2.3** Create DatabaseSessionManager
+  - [x] Track active database sessions
+  - [x] Implement session lifecycle (create/load/close)
+  - [x] Add session metadata (created_at, last_accessed, size)
+  - [x] Support multiple concurrent sessions
+  - [x] Add cleanup for old sessions
 
 ## Phase 3: Query Interface (Week 2)
 
 ### Direct Query API
 
-- [ ] **3.1** Create TimeQLQueryClient class
-  - [ ] Constructor with database path/session options
-  - [ ] `query(timeql: string)` method for TimeQL queries
-  - [ ] `sql(query: string)` method for raw SQL
-  - [ ] `listDatabases()` to show available persisted DBs
-  - [ ] `loadDatabase(name)` to load specific DB
-  - [ ] `getMetadata()` for database info
+- [x] **3.1** Create TimeQLQueryClient class
+  - [x] Constructor with database path/session options
+  - [x] `query(timeql: string)` method for TimeQL queries
+  - [x] `sql(query: string)` method for raw SQL
+  - [x] `listDatabases()` to show available persisted DBs
+  - [x] `loadDatabase(name)` to load specific DB
+  - [x] `getMetadata()` for database info
 
 ### Query Execution Pipeline
 
-- [ ] **3.2** Implement query execution flow
-  - [ ] Parse TimeQL query
-  - [ ] Detect database vs streaming query
-  - [ ] Generate optimized SQL
-  - [ ] Execute against DuckDB
-  - [ ] Format results consistently
-  - [ ] Add query caching layer
+- [x] **3.2** Implement query execution flow
+  - [x] Parse TimeQL query
+  - [x] Detect database vs streaming query
+  - [x] Generate optimized SQL
+  - [x] Execute against DuckDB
+  - [x] Format results consistently
+  - [x] Add query caching layer
 
 ### Error Handling
 
-- [ ] **3.3** Comprehensive error handling
-  - [ ] Database not found errors
-  - [ ] Invalid query syntax errors
-  - [ ] SQL generation failures
-  - [ ] DuckDB execution errors
-  - [ ] Helpful error messages with suggestions
+- [x] **3.3** Comprehensive error handling
+  - [x] Database not found errors
+  - [x] Invalid query syntax errors
+  - [x] SQL generation failures
+  - [x] DuckDB execution errors
+  - [x] Helpful error messages with suggestions
 
 ## Phase 4: Aggregation Support (Week 2-3)
 
@@ -102,16 +102,16 @@ This implementation plan outlines the steps to enable TimeQL queries on persiste
   - [x] Support functions: sum, avg, min, max, count
   - [x] Add `GroupingClause` for "by(labels)"
   - [x] Support nested aggregations
-  - [ ] Test with complex aggregation queries
+  - [x] Test with complex aggregation queries
 
 ### Aggregation SQL Generation
 
 - [x] **4.2** SQL generation for aggregations
   - [x] Map aggregation functions to SQL
   - [x] Handle GROUP BY clauses
-  - [ ] Support HAVING conditions
+  - [x] Support HAVING conditions
   - [x] Optimize for DuckDB columnar storage
-  - [ ] Add aggregation-specific tests
+  - [x] Add aggregation-specific tests
 
 ### Time-Series Functions
 
@@ -126,12 +126,12 @@ This implementation plan outlines the steps to enable TimeQL queries on persiste
 
 ### Pattern Matching
 
-- [ ] **5.1** Event sequence patterns
-  - [ ] Add pattern operators to grammar (follows, precedes)
-  - [ ] Implement pattern matching in SQL
-  - [ ] Support temporal constraints (within)
-  - [ ] Add pattern query examples
-  - [ ] Test with real-world patterns
+- [x] **5.1** Event sequence patterns
+  - [x] Add pattern operators to grammar (follows, precedes)
+  - [x] Implement pattern matching in SQL
+  - [x] Support temporal constraints (within)
+  - [x] Add pattern query examples
+  - [x] Test with real-world patterns
 
 ### Multi-Stream Correlations
 
@@ -202,13 +202,13 @@ This implementation plan outlines the steps to enable TimeQL queries on persiste
 
 ### CLI Tool
 
-- [ ] **7.3** Create timeql CLI
-  - [ ] `timeql query <database> <query>` - Execute query
-  - [ ] `timeql list` - List databases
-  - [ ] `timeql info <database>` - Show metadata
-  - [ ] `timeql export <database>` - Export to file
-  - [ ] `timeql import <file>` - Import database
-  - [ ] `timeql repl <database>` - Interactive REPL
+- [x] **7.3** Create timeql CLI
+  - [x] `timeql query <database> <query>` - Execute query
+  - [x] `timeql list` - List databases
+  - [x] `timeql info <database>` - Show metadata
+  - [x] `timeql export <database>` - Export to file
+  - [x] `timeql import <file>` - Import database
+  - [x] `timeql repl <database>` - Interactive REPL
 
 ## Phase 8: Advanced Capabilities (Future)
 

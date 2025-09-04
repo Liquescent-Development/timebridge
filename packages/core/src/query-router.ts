@@ -6,6 +6,8 @@ import { QueryOptimizer } from './query-optimizer';
 import { BloomFilter } from './bloom-filter-wrapper';
 import { EventEmitter } from 'eventemitter3';
 import { routerLogger, optimizerLogger } from './logger';
+import * as path from 'path';
+import * as os from 'os';
 
 export interface QueryRouterConfig {
   /**
@@ -60,6 +62,24 @@ export interface QueryRouterConfig {
    * Default: 30 seconds
    */
   semiJoinOptimizationDelay?: number;
+  
+  /**
+   * Persist DuckDB data after query completion
+   * Default: false
+   */
+  persistData?: boolean;
+  
+  /**
+   * Path to persist DuckDB database
+   * Default: temp directory
+   */
+  persistPath?: string;
+  
+  /**
+   * Name for persisted database
+   * Default: timestamp-based
+   */
+  databaseName?: string;
 }
 
 export interface RoutingDecision {
@@ -115,7 +135,10 @@ export class QueryRouter extends EventEmitter {
       enableSemiJoinOptimization: config.enableSemiJoinOptimization ?? true,
       bloomFilterThreshold: config.bloomFilterThreshold || 900, // Switch to Bloom filter before hitting Graylog's limit
       semiJoinOptimizationDelay: config.semiJoinOptimizationDelay || 30000,
-      duckdbBatchSize: config.duckdbBatchSize || 1000000
+      duckdbBatchSize: config.duckdbBatchSize || 1000000,
+      persistData: config.persistData || false,
+      persistPath: config.persistPath,
+      databaseName: config.databaseName
     };
     
     this.streamJoiner = new StreamJoiner(this.config.streamJoinerConfig);
@@ -194,8 +217,42 @@ export class QueryRouter extends EventEmitter {
     
     if (decision.engine === 'duckdb') {
       yield* this.executeWithDuckDB(query, adapters);
+      
+      // Handle persistence after DuckDB execution
+      if (this.config.persistData) {
+        await this.persistDatabase();
+      }
     } else {
       yield* this.executeWithStreamJoiner(query, adapters);
+    }
+  }
+  
+  /**
+   * Persist the DuckDB database after query completion
+   */
+  private async persistDatabase(): Promise<void> {
+    try {
+      const persistPath = this.config.persistPath || path.join(os.tmpdir(), 'timebridge_persist');
+      const dbName = this.config.databaseName || `timebridge_${Date.now()}`;
+      const fullPath = path.join(persistPath, `${dbName}.duckdb`);
+      
+      // Export the database
+      await this.duckdb.exportDatabase(fullPath);
+      
+      routerLogger.info({ 
+        path: fullPath,
+        dbName 
+      }, 'Database persisted successfully');
+      
+      // Emit event for persistence
+      this.emit('databasePersisted', {
+        path: fullPath,
+        name: dbName,
+        metadata: await this.duckdb.getDatabaseMetadata()
+      });
+    } catch (error) {
+      routerLogger.error({ error }, 'Failed to persist database');
+      // Don't throw - persistence failure shouldn't break the query
     }
   }
 
