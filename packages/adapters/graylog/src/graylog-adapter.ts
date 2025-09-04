@@ -658,7 +658,9 @@ export class GraylogAdapter implements DataSourceAdapter {
    */
   async *streamCSVAsEvents(
     query: string,
-    timeRange: string = '1h'
+    timeRange: string,
+    joinKeys: string[] = [],
+    sourceName?: string
   ): AsyncIterable<LogEvent> {
     const parsedQuery = this.parser.parse(query);
     const queryFields = this.extractFieldsFromQuery(parsedQuery as any);
@@ -715,54 +717,231 @@ export class GraylogAdapter implements DataSourceAdapter {
       trim: false
     });
 
+    // Track parsing state
+    let recordCount = 0;
+    let hasStarted = false;
+    let hasEnded = false;
+    let parseError: Error | null = null;
+    
+    // Set up error and end handlers
+    csvParser.on('error', (err: Error) => {
+      csvLogger.error({ error: err.message, stack: err.stack }, "CSV parser error");
+      parseError = err;
+    });
+    
+    csvParser.on('end', () => {
+      hasEnded = true;
+      csvLogger.debug({ recordCount }, "CSV parser ended");
+    });
+    
+    // Log the response headers for debugging
+    csvLogger.debug({ 
+      contentType: response.headers.get('content-type'),
+      contentEncoding: response.headers.get('content-encoding'),
+      contentLength: response.headers.get('content-length')
+    }, "Response headers");
+
     // Handle gzip if needed - but verify it's actually gzipped
     const isGzipped = response.headers.get('content-encoding') === 'gzip';
     if (isGzipped) {
       const zlib = require('zlib');
-      const { PassThrough } = require('stream');
+      const { Transform } = require('stream');
       
-      // Create a passthrough stream to inspect the data
-      const inspector = new PassThrough();
-      let firstChunk: Buffer | null = null;
+      // Create a transform stream that checks first chunk and routes accordingly
+      let isActuallyGzipped: boolean | null = null;
+      let gunzip: any = null;
       
-      inspector.once('data', (chunk: Buffer) => {
-        firstChunk = chunk;
-        // Check if it starts with gzip magic number (1f 8b)
-        if (chunk[0] === 0x1f && chunk[1] === 0x8b) {
-          // Actually gzipped, decompress it
-          const gunzip = zlib.createGunzip();
-          gunzip.write(chunk);
-          inspector.pipe(gunzip).pipe(csvParser);
-        } else {
-          // Not actually gzipped despite header, process as plain text
-          csvParser.write(chunk);
-          inspector.pipe(csvParser);
+      const inspector = new Transform({
+        transform(chunk: Buffer, encoding: string, callback: (error?: Error | null) => void) {
+          // Check if the stream has been destroyed before processing
+          if (this.destroyed) {
+            return callback();
+          }
+          
+          if (isActuallyGzipped === null) {
+            // First chunk - determine if actually gzipped
+            csvLogger.debug({ 
+              firstBytes: chunk.slice(0, 10).toString('hex'),
+              bytesReceived: chunk.length,
+              preview: chunk.slice(0, 100).toString()
+            }, "First chunk received (gzipped response)");
+            
+            // Check if it starts with gzip magic number (1f 8b)
+            isActuallyGzipped = chunk[0] === 0x1f && chunk[1] === 0x8b;
+            
+            if (isActuallyGzipped) {
+              csvLogger.debug({}, "Actually gzipped, setting up decompression");
+              // Actually gzipped, create gunzip stream
+              gunzip = zlib.createGunzip();
+              gunzip.on('error', (err: Error) => {
+                csvLogger.error({ error: err.message }, "Gunzip error");
+                this.destroy(err);
+              });
+              gunzip.pipe(csvParser);
+            } else {
+              csvLogger.debug({}, "Not actually gzipped despite header");
+            }
+          }
+          
+          // Route the chunk to the appropriate destination - with error handling
+          try {
+            if (isActuallyGzipped && gunzip) {
+              if (!gunzip.destroyed) {
+                gunzip.write(chunk, callback);
+              } else {
+                callback();
+              }
+            } else {
+              if (!csvParser.destroyed) {
+                csvParser.write(chunk, callback);
+              } else {
+                callback();
+              }
+            }
+          } catch (err) {
+            // If write fails due to destroyed stream, just continue
+            callback();
+          }
+        },
+        flush(callback: (error?: Error | null) => void) {
+          // End the appropriate stream - with error handling
+          try {
+            if (isActuallyGzipped && gunzip && !gunzip.destroyed) {
+              gunzip.end();
+            } else if (!isActuallyGzipped && !csvParser.destroyed) {
+              csvParser.end();
+            }
+          } catch (err) {
+            // Ignore errors during flush if stream is already destroyed
+          }
+          callback();
         }
+      });
+      
+      inspector.on('error', (err: Error) => {
+        csvLogger.error({ error: err.message }, "Inspector transform error");
+        csvParser.destroy(err);
       });
       
       body.pipe(inspector);
     } else {
+      csvLogger.debug({}, "Response is not gzipped, piping directly to CSV parser");
+      
+      // Add debugging for the body stream
+      let bodyBytes = 0;
+      let firstDataLogged = false;
+      body.on('data', (chunk: any) => {
+        bodyBytes += chunk.length;
+        if (!firstDataLogged) {
+          firstDataLogged = true;
+          csvLogger.debug({ 
+            chunkSize: chunk.length,
+            totalBytes: bodyBytes,
+            preview: chunk.slice(0, Math.min(200, chunk.length)).toString()
+          }, "First body data received");
+        }
+      });
+      
+      body.on('end', () => {
+        csvLogger.debug({ totalBytes: bodyBytes }, "Body stream ended");
+      });
+      
+      body.on('error', (err: Error) => {
+        csvLogger.error({ error: err.message }, "Body stream error");
+      });
+      
       body.pipe(csvParser);
     }
 
+    // Wait for the stream to be ready and properly connected
+    // For gzipped responses, we need to ensure the entire pipeline is set up
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // Create a promise that resolves when we get the first data or an error
+    const streamReady = new Promise<void>((resolve, reject) => {
+      let resolved = false;
+      
+      const resolveOnce = () => {
+        if (!resolved) {
+          resolved = true;
+          resolve();
+        }
+      };
+      
+      // Resolve when parser is readable
+      csvParser.once('readable', () => {
+        csvLogger.debug({}, "CSV parser is readable");
+        resolveOnce();
+      });
+      
+      // Also resolve on first data event
+      csvParser.once('data', () => {
+        csvLogger.debug({}, "CSV parser received first data");
+        // Put the data back since we're just checking
+        csvParser.pause();
+        resolveOnce();
+      });
+      
+      // Reject on error
+      csvParser.once('error', (err) => {
+        csvLogger.error({ error: err.message }, "CSV parser error during setup");
+        if (!resolved) {
+          resolved = true;
+          reject(err);
+        }
+      });
+      
+      // Timeout after 10 seconds
+      setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          csvLogger.warn({}, "Stream setup timeout - proceeding anyway");
+          resolve();
+        }
+      }, 10000);
+    });
+    
+    try {
+      csvLogger.debug({}, "Waiting for CSV stream to be ready...");
+      await streamReady;
+      csvLogger.debug({}, "CSV stream is ready, starting iteration");
+    } catch (setupError) {
+      csvLogger.error({ error: setupError }, "Failed to set up CSV stream");
+      throw setupError;
+    }
+    
+    csvLogger.debug({}, "Starting to iterate over CSV records");
+
     // Convert CSV records to LogEvents
-    for await (const record of csvParser) {
+    try {
+      // Resume the parser if we paused it
+      if (csvParser.isPaused()) {
+        csvParser.resume();
+      }
+      
+      for await (const record of csvParser) {
+        if (!hasStarted) {
+          hasStarted = true;
+          csvLogger.debug({ firstRecord: Object.keys(record).slice(0, 10) }, "First CSV record received");
+        }
+        
+        recordCount++;
       // Extract standard fields
       const timestamp = record.timestamp || new Date().toISOString();
       const message = record.message || '';
-      const source = record.source || 'graylog';
+      // Use the provided sourceName (adapter identifier) instead of CSV source field
+      const source = sourceName || 'graylog';
       
       // Everything else goes into labels
       const labels: Record<string, any> = {};
-      const joinKeys: Record<string, any> = {};
+      const eventJoinKeys: Record<string, any> = {};
       
       for (const [key, value] of Object.entries(record)) {
-        if (key !== 'timestamp' && key !== 'message' && key !== 'source') {
+        if (key !== 'timestamp' && key !== 'message') {
           labels[key] = value;
-          // Common join keys
-          if (key === 'request_id' || key === 'trace_id' || key === 'correlation_id' || 
-              key === 'session_id' || key === 'user_id' || key === 'account_id') {
-            joinKeys[key] = value;
+          // Dynamically populate join keys based on query
+          if (joinKeys.includes(key) && value) {
+            eventJoinKeys[key] = value;
           }
         }
       }
@@ -772,10 +951,30 @@ export class GraylogAdapter implements DataSourceAdapter {
         source,
         message,
         labels,
-        joinKeys: Object.keys(joinKeys).length > 0 ? joinKeys : undefined
+        joinKeys: Object.keys(eventJoinKeys).length > 0 ? eventJoinKeys : undefined
       };
       
       yield event;
+    }
+    } catch (iterError) {
+      csvLogger.error({ 
+        error: iterError instanceof Error ? iterError.message : String(iterError),
+        stack: iterError instanceof Error ? iterError.stack : undefined,
+        recordCount,
+        hasStarted,
+        hasEnded,
+        parseError: parseError ? (parseError as Error).message : undefined
+      }, "Error iterating CSV records");
+      
+      // Re-throw to let the caller handle it
+      throw iterError;
+    } finally {
+      csvLogger.debug({ 
+        recordCount,
+        hasStarted,
+        hasEnded,
+        parseError: parseError ? (parseError as Error).message : undefined 
+      }, "CSV streaming completed");
     }
   }
 

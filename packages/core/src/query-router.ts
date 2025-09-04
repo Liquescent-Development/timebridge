@@ -447,7 +447,9 @@ export class QueryRouter extends EventEmitter {
         // Stream parsed CSV events directly
         const eventStream = adapter.streamCSVAsEvents(
           streamConfig.selector,
-          streamConfig.timeRange
+          streamConfig.timeRange,
+          joinKeys,
+          streamConfig.source
         );
         
         // Transform events to add stream identifier and track progress
@@ -719,12 +721,23 @@ export class QueryRouter extends EventEmitter {
             return;
           }
           
-          // Left completed first - optimize right stream
+          // Left completed first - check if optimization makes sense
+          const MIN_KEYS_FOR_OPTIMIZATION = 10; // Don't optimize for very small key sets
+          
+          if (leftProgress.uniqueJoinKeys.size < MIN_KEYS_FOR_OPTIMIZATION) {
+            optimizerLogger.info({ 
+              uniqueKeys: leftProgress.uniqueJoinKeys.size,
+              threshold: MIN_KEYS_FOR_OPTIMIZATION 
+            }, "Left stream has too few unique keys, skipping optimization");
+            resolve(null);
+            return;
+          }
+          
           // This is safe for ALL join types:
           // - INNER JOIN: We only need right events that match left keys
           // - LEFT JOIN: We only need right events that match left keys (left events already loaded)
           // - ANTI JOIN: We only need to check right events that match left keys
-          optimizerLogger.info({ uniqueKeys: leftProgress.uniqueJoinKeys.size }, "Left stream completed first");
+          optimizerLogger.info({ uniqueKeys: leftProgress.uniqueJoinKeys.size }, "Left stream completed first, applying optimization");
           
           // Get the completed events from DuckDB for time bounds extraction
           const completedEvents = await this.getCompletedStreamEvents('left', joinKey);
@@ -749,7 +762,19 @@ export class QueryRouter extends EventEmitter {
             return;
           }
           
-          optimizerLogger.info({ uniqueKeys: rightProgress.uniqueJoinKeys.size }, "Right stream completed first");
+          // Check if optimization makes sense based on key count
+          const MIN_KEYS_FOR_OPTIMIZATION = 10; // Don't optimize for very small key sets
+          
+          if (rightProgress.uniqueJoinKeys.size < MIN_KEYS_FOR_OPTIMIZATION) {
+            optimizerLogger.info({ 
+              uniqueKeys: rightProgress.uniqueJoinKeys.size,
+              threshold: MIN_KEYS_FOR_OPTIMIZATION 
+            }, "Right stream has too few unique keys, skipping optimization");
+            resolve(null);
+            return;
+          }
+          
+          optimizerLogger.info({ uniqueKeys: rightProgress.uniqueJoinKeys.size }, "Right stream completed first, applying optimization");
           
           // Get the completed events from DuckDB for time bounds extraction
           const completedEvents = await this.getCompletedStreamEvents('right', joinKey);
@@ -828,19 +853,9 @@ export class QueryRouter extends EventEmitter {
     const keyCount = joinKeys.size;
     // For large key sets, use batched parallel queries (most efficient for server-side filtering)
     // For smaller key sets, use simple IN lists
-    // Only use bloom filter for client-side filtering as a fallback
-    const useBatchedKeyFilter = keyCount > 1000; // Use batched queries for large key sets
-    const useInList = keyCount <= 900 && keyCount <= 1000; // Small enough for single IN query
-    const useBloomFilter = !useBatchedKeyFilter && !useInList; // Fallback for medium-sized sets
+    const useBatchedKeyFilter = keyCount > 100; // Use batched queries for anything over 100 keys
     
-    let filterType: string;
-    if (useBatchedKeyFilter) {
-      filterType = 'batched parallel queries';
-    } else if (useInList) {
-      filterType = 'IN list';
-    } else {
-      filterType = 'bloom filter (client-side)';
-    }
+    const filterType = useBatchedKeyFilter ? 'batched parallel queries' : 'IN list';
     
     optimizerLogger.info({ keyCount, filterType }, "Creating semi-join optimization");
     
@@ -876,27 +891,12 @@ export class QueryRouter extends EventEmitter {
         optimizedQuery: null,
         timeBounds
       };
-    } else if (useInList) {
+    } else {
       // Use simple IN list for small key sets
       return {
         targetStream,
         filterType: 'in_list',
         filter: joinKeys,
-        joinKey,
-        originalQuery: targetStream === 'left' ? originalQuery.leftStream : originalQuery.rightStream,
-        optimizedQuery: null,
-        timeBounds
-      };
-    } else {
-      // Bloom filter fallback for medium-sized key sets
-      const bloomFilter = BloomFilter.fromSet(joinKeys, 0.001);
-      const stats = bloomFilter.getStats();
-      optimizerLogger.debug({ stats }, "Bloom filter stats");
-      
-      return {
-        targetStream,
-        filterType: 'bloom',
-        filter: bloomFilter,
         joinKey,
         originalQuery: targetStream === 'left' ? originalQuery.leftStream : originalQuery.rightStream,
         optimizedQuery: null,
@@ -1079,7 +1079,9 @@ export class QueryRouter extends EventEmitter {
           try {
             batchStream = adapter.streamCSVAsEvents(
               batchQuery,
-              streamConfig.timeRange
+              streamConfig.timeRange,
+              query.joinKeys || [],
+              streamConfig.source
             );
             
             optimizerLogger.debug({ 
@@ -1119,15 +1121,33 @@ export class QueryRouter extends EventEmitter {
           startingIteration: true
         }, "Starting to iterate over batch stream");
         
+        let iterationStarted = false;
+        let iterationEnded = false;
+        
         try {
+          optimizerLogger.debug({ 
+            batchNumber: batchIndex + 1,
+            aboutToIterate: true
+          }, "About to start for-await loop");
+          
           for await (const event of batchStream) {
+            if (!iterationStarted) {
+              iterationStarted = true;
+              optimizerLogger.debug({ 
+                batchNumber: batchIndex + 1,
+                iterationStarted: true,
+                firstEvent: true
+              }, "For-await loop started, first event received");
+            }
+            
             batchEvents.push(event);
             
             // Log first event to confirm stream is working
             if (batchEvents.length === 1) {
               optimizerLogger.debug({ 
                 batchNumber: batchIndex + 1,
-                firstEventReceived: true
+                firstEventReceived: true,
+                eventSample: event.message?.substring(0, 100)
               }, "First event received from batch stream");
             }
             
@@ -1141,14 +1161,32 @@ export class QueryRouter extends EventEmitter {
               break;
             }
           }
+          
+          iterationEnded = true;
+          optimizerLogger.debug({ 
+            batchNumber: batchIndex + 1,
+            iterationEnded: true,
+            eventsCollected: batchEvents.length
+          }, "For-await loop completed normally");
+          
         } catch (iterError) {
           optimizerLogger.error({ 
             batchNumber: batchIndex + 1,
             error: iterError,
             errorMessage: iterError instanceof Error ? iterError.message : String(iterError),
-            eventsCollectedSoFar: batchEvents.length
+            errorStack: iterError instanceof Error ? iterError.stack : undefined,
+            eventsCollectedSoFar: batchEvents.length,
+            iterationStarted,
+            iterationEnded
           }, "Error while iterating batch stream");
           // Return what we have so far
+        }
+        
+        if (!iterationStarted) {
+          optimizerLogger.warn({ 
+            batchNumber: batchIndex + 1,
+            warning: "Stream iteration never started"
+          }, "Batch stream did not yield any events");
         }
         
         routerLogger.debug({ 
@@ -1458,23 +1496,33 @@ export class QueryRouter extends EventEmitter {
         return;
       }
       
-      const maxKeysInQuery = 900; // Stay well below Graylog's maxClauseCount of 1024
-      
-      if (keys.length > maxKeysInQuery) {
-        // Too many keys for IN list - should have used Bloom filter
-        routerLogger.info({ keyCount: keys.length }, "Too many keys for IN list, will filter client-side instead");
-        // Don't modify the query, we'll filter client-side with missing keys only
-      } else {
-        // Safe to use IN list in query
-        const keyList = keys.map(k => `"${k}"`).join(',');
-        
-        // For Graylog, add the filter
-        if (streamConfig.source.startsWith('graylog')) {
-          optimizedSelector = `(${streamConfig.selector}) AND ${optimization.joinKey}:(${keyList})`;
-        }
-        
-        routerLogger.debug({ keyCount: keys.length }, "Added IN list filter to query");
+      // Should never reach here with > 100 keys, but add safety check
+      if (keys.length > 100) {
+        routerLogger.warn({ keyCount: keys.length }, "IN list has too many keys, should have used batched queries");
+        // Fall back to batched execution
+        optimization.filterType = 'batched_keys';
+        await this.executeBatchedKeyQueries(
+          optimization,
+          streamConfig,
+          adapters,
+          query,
+          existingKeys
+        );
+        return;
       }
+      
+      // Safe to use IN list in query (100 keys or less)
+      // For Graylog, don't quote UUID values - they should be bare
+      const keyList = streamConfig.source.startsWith('graylog') 
+        ? keys.join(' OR ')  // No quotes for Graylog UUIDs
+        : keys.map(k => `"${k}"`).join(' OR ');  // Quotes for other adapters if needed
+      
+      // For Graylog, add the filter
+      if (streamConfig.source.startsWith('graylog')) {
+        optimizedSelector = `(${streamConfig.selector}) AND ${optimization.joinKey}:(${keyList})`;
+      }
+      
+      routerLogger.debug({ keyCount: keys.length }, "Added IN list filter to query");
       
       // Update the optimization filter to only include missing keys
       optimization.filter = new Set(keys);
@@ -1520,7 +1568,9 @@ export class QueryRouter extends EventEmitter {
       routerLogger.debug({ targetStream: optimization.targetStream }, "Using CSV streaming for optimized stream");
       stream = adapter.streamCSVAsEvents(
         optimizedSelector,
-        streamConfig.timeRange
+        streamConfig.timeRange,
+        query.joinKeys || [],
+        streamConfig.source
       );
     } else {
       stream = adapter.createStream(
