@@ -221,6 +221,9 @@ export class QueryRouter extends EventEmitter {
       // Handle persistence after DuckDB execution
       if (this.config.persistData) {
         await this.persistDatabase();
+        
+        // Note: Persistence is complete at this point
+        // The test application can check if persistData was enabled to know persistence is done
       }
     } else {
       yield* this.executeWithStreamJoiner(query, adapters);

@@ -15,3 +15,9 @@ allowed-domains.txt
 CLAUDE.md
 .claude/
 influxql-spec.md
+
+# Test files for manual testing
+test-*.js
+test-*.ts
+!packages/*/src/**/*.test.ts
+!packages/*/src/**/*.test.js
