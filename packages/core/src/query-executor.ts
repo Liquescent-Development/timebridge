@@ -101,12 +101,9 @@ export class TimeQLExecutor {
       console.log(`[QueryRouter] Using ${decision.engine}: ${decision.reason}`);
       
       // Execute through router which handles both StreamJoiner and DuckDB
-      for await (const correlation of this.router.execute(parsedQuery, this.adapters)) {
-        // Router now returns CorrelatedEvents directly
-        yield {
-          type: 'correlation' as const,
-          data: correlation
-        };
+      for await (const result of this.router.execute(parsedQuery, this.adapters)) {
+        // Router now returns TimeQLResult directly
+        yield result;
       }
     }
   }

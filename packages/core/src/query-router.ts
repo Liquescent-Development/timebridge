@@ -1,4 +1,4 @@
-import { ParsedQuery, LogEvent, CorrelatedEvent } from './types';
+import { ParsedQuery, LogEvent, CorrelatedEvent, TimeQLResult } from './types';
 import { StreamJoiner } from './stream-joiner';
 import { DuckDBExecutor } from './duckdb-executor';
 import { TimeQLToSQLGenerator } from './timeql-to-sql';
@@ -209,7 +209,7 @@ export class QueryRouter extends EventEmitter {
   /**
    * Execute a query using the appropriate engine
    */
-  async *execute(query: ParsedQuery, adapters: Map<string, any>): AsyncIterable<CorrelatedEvent> {
+  async *execute(query: ParsedQuery, adapters: Map<string, any>): AsyncIterable<TimeQLResult> {
     const decision = await this.decideRoute(query);
     
     // Log routing decision for debugging
@@ -265,7 +265,7 @@ export class QueryRouter extends EventEmitter {
   private async *executeWithStreamJoiner(
     query: ParsedQuery, 
     adapters: Map<string, any>
-  ): AsyncIterable<CorrelatedEvent> {
+  ): AsyncIterable<TimeQLResult> {
     // Get streams from adapters
     const leftAdapter = adapters.get(query.leftStream.source);
     const rightAdapter = query.rightStream ? adapters.get(query.rightStream.source) : null;
@@ -294,30 +294,18 @@ export class QueryRouter extends EventEmitter {
     
     // Execute correlation
     if (rightStream && query.rightStream) {
-      yield* this.streamJoiner.join(leftStream, rightStream);
+      for await (const correlation of this.streamJoiner.join(leftStream, rightStream)) {
+        yield {
+          type: 'correlation',
+          data: correlation
+        };
+      }
     } else {
       // Single stream query
       for await (const event of leftStream) {
         yield {
-          correlationId: event.labels?.correlation_id || 'single-' + Date.now(),
-          timestamp: event.timestamp,
-          timeWindow: {
-            start: event.timestamp,
-            end: event.timestamp
-          },
-          joinKey: 'none',
-          joinValue: 'none',
-          events: [{
-            source: event.source,
-            timestamp: event.timestamp,
-            message: event.message,
-            labels: event.labels
-          }],
-          metadata: {
-            completeness: 'partial' as const,
-            matchedStreams: [event.source],
-            totalStreams: 1
-          }
+          type: 'event',
+          data: event
         };
       }
     }
@@ -329,7 +317,7 @@ export class QueryRouter extends EventEmitter {
   private async *executeWithDuckDB(
     query: ParsedQuery,
     adapters: Map<string, any>
-  ): AsyncIterable<CorrelatedEvent> {
+  ): AsyncIterable<TimeQLResult> {
     // Initialize DuckDB if needed
     await this.duckdb.initialize();
     
@@ -1809,7 +1797,7 @@ export class QueryRouter extends EventEmitter {
   private async *processQueryResults(
     queryResults: any[],
     query: ParsedQuery
-  ): AsyncGenerator<CorrelatedEvent> {
+  ): AsyncGenerator<TimeQLResult> {
     // Group results by correlation_id (join value)
     const correlations = new Map<string, {
       joinKey: string;
@@ -1879,19 +1867,22 @@ export class QueryRouter extends EventEmitter {
         const rightCount = correlation.events.filter(e => e.alias === 'right').length;
         
         yield {
-          correlationId: correlationId,
-          timestamp: correlation.minTimestamp,
-          timeWindow: {
-            start: correlation.minTimestamp,
-            end: correlation.maxTimestamp
-          },
-          joinKey: correlation.joinKey,
-          joinValue: correlation.joinValue,
-          events: correlation.events,
-          metadata: {
-            completeness: (leftCount > 0 && rightCount > 0) ? 'complete' : 'partial',
-            matchedStreams: leftCount > 0 && rightCount > 0 ? ['left', 'right'] : leftCount > 0 ? ['left'] : ['right'],
-            totalStreams: 2
+          type: 'correlation',
+          data: {
+            correlationId: correlationId,
+            timestamp: correlation.minTimestamp,
+            timeWindow: {
+              start: correlation.minTimestamp,
+              end: correlation.maxTimestamp
+            },
+            joinKey: correlation.joinKey,
+            joinValue: correlation.joinValue,
+            events: correlation.events,
+            metadata: {
+              completeness: (leftCount > 0 && rightCount > 0) ? 'complete' : 'partial',
+              matchedStreams: leftCount > 0 && rightCount > 0 ? ['left', 'right'] : leftCount > 0 ? ['left'] : ['right'],
+              totalStreams: 2
+            }
           }
         };
       }
