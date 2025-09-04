@@ -575,9 +575,9 @@ export class TimeQLToSQLGenerator {
       : `json_extract_string(r.labels, '$.${joinField}')`;
     
     let sql = 'SELECT\n';
-    sql += `  COALESCE(${leftJoinExpr}, 'unmatched-' || l.timestamp) as correlation_id,\n`;  // Use join field value as correlation_id
+    sql += `  ${leftJoinExpr} as correlation_id,\n`;  // Use join field value as correlation_id
     sql += `  '${joinField}' as join_key,\n`;
-    sql += `  COALESCE(${leftJoinExpr}, 'unmatched') as join_value,\n`;
+    sql += `  ${leftJoinExpr} as join_value,\n`;
     sql += '  l.timestamp as left_timestamp,\n';
     sql += '  r.timestamp as right_timestamp,\n';
     sql += '  l.message as left_message,\n';
