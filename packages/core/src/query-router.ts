@@ -236,7 +236,10 @@ export class QueryRouter extends EventEmitter {
       const dbName = this.config.databaseName || `timebridge_${Date.now()}`;
       const fullPath = path.join(persistPath, `${dbName}.duckdb`);
       
-      // Export the database
+      // Persist the database to disk as a .duckdb file
+      await this.duckdb.persistToDisk(fullPath);
+      
+      // Also export to Parquet for backup/portability
       await this.duckdb.exportDatabase(fullPath);
       
       routerLogger.info({ 

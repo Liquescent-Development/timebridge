@@ -624,7 +624,11 @@ export class DuckDBExecutor extends EventEmitter {
    */
   async persistToDisk(persistPath: string): Promise<void> {
     if (this.config.databasePath && this.config.databasePath !== ':memory:') {
-      duckdbLogger.warn('Database is already persisted on disk');
+      // If already on disk, just copy the file
+      if (persistPath !== this.config.databasePath) {
+        fs.copyFileSync(this.config.databasePath, persistPath);
+        duckdbLogger.info({ from: this.config.databasePath, to: persistPath }, 'Copied database file');
+      }
       return;
     }
 
@@ -636,8 +640,27 @@ export class DuckDBExecutor extends EventEmitter {
 
       duckdbLogger.info({ path: persistPath }, 'Persisting in-memory database to disk');
       
-      // Use DuckDB's COPY command to export to a new database
-      await this.execute(`COPY DATABASE TO '${persistPath}'`);
+      // First export to Parquet
+      const exportDir = persistPath.replace(/\.duckdb$/, '_export');
+      await this.execute(`EXPORT DATABASE '${exportDir}' (FORMAT PARQUET)`);
+      
+      // Create a new file-based database and import the data
+      const newDb = new duckdb.Database(persistPath);
+      const newConn = newDb.connect();
+      
+      await new Promise<void>((resolve, reject) => {
+        newConn.exec(`IMPORT DATABASE '${exportDir}'`, (err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+      
+      // Close the new database
+      await new Promise<void>((resolve) => {
+        newConn.close(() => {
+          newDb.close(() => resolve());
+        });
+      });
       
       duckdbLogger.info({ 
         path: persistPath,

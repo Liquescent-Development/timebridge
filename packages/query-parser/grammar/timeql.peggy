@@ -2,10 +2,9 @@
 // A PromQL-inspired query language for log correlation and direct queries
 
 Query
-  = AggregationQuery
-  / PatternQuery
-  / CorrelationQuery
-  / DirectQuery
+  = _ query:(AggregationQuery / PatternQuery / CorrelationQuery / DirectQuery) _ {
+      return query;
+    }
 
 // Pattern matching query (e.g., events{service="auth"}[5m] follows events{service="api"}[5m] within(30s))
 PatternQuery
