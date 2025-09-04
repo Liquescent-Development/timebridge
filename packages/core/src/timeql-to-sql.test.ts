@@ -34,7 +34,7 @@ describe('TimeQLToSQLGenerator', () => {
       expect(sql).toContain("source = 'frontend'");
       expect(sql).toContain("source = 'backend'");
       expect(sql).toContain('l.request_id = r.request_id');
-      expect(sql).toContain("INTERVAL '5 minutes'");
+      expect(sql).toContain("INTERVAL '5m'");
       expect(sql).toContain('ORDER BY l.timestamp');
     });
 
@@ -58,7 +58,7 @@ describe('TimeQLToSQLGenerator', () => {
       
       expect(sql).toContain('LEFT JOIN');
       expect(sql).toContain('l.trace_id = r.trace_id');
-      expect(sql).toContain("INTERVAL '1 hours'");
+      expect(sql).toContain("INTERVAL '1h'");
     });
 
     it('should generate ANTI JOIN query for UNLESS join type', () => {
@@ -81,7 +81,7 @@ describe('TimeQLToSQLGenerator', () => {
       
       expect(sql).toContain('WHERE NOT EXISTS');
       expect(sql).toContain('l.correlation_id = r.correlation_id');
-      expect(sql).toContain("INTERVAL '30 minutes'");
+      expect(sql).toContain("INTERVAL '30m'");
       expect(sql).not.toContain('JOIN');
     });
   });
@@ -104,7 +104,7 @@ describe('TimeQLToSQLGenerator', () => {
       };
 
       const sql = generator.generateSQL(query);
-      expect(sql).toContain("INTERVAL '30 seconds'");
+      expect(sql).toContain("INTERVAL '30s'");
     });
 
     it('should parse minutes correctly', () => {
@@ -124,7 +124,7 @@ describe('TimeQLToSQLGenerator', () => {
       };
 
       const sql = generator.generateSQL(query);
-      expect(sql).toContain("INTERVAL '15 minutes'");
+      expect(sql).toContain("INTERVAL '15m'");
     });
 
     it('should parse hours correctly', () => {
@@ -144,7 +144,7 @@ describe('TimeQLToSQLGenerator', () => {
       };
 
       const sql = generator.generateSQL(query);
-      expect(sql).toContain("INTERVAL '2 hours'");
+      expect(sql).toContain("INTERVAL '2h'");
     });
 
     it('should parse days correctly', () => {
@@ -164,7 +164,7 @@ describe('TimeQLToSQLGenerator', () => {
       };
 
       const sql = generator.generateSQL(query);
-      expect(sql).toContain("INTERVAL '7 days'");
+      expect(sql).toContain("INTERVAL '7d'");
     });
 
     it('should handle queries without time range', () => {
@@ -326,8 +326,8 @@ describe('TimeQLToSQLGenerator', () => {
       const sql = generator.generateSQL(query);
       expect(sql).toContain('INNER JOIN');
       expect(sql).toContain('l.session_id = r.session_id');
-      expect(sql).toContain("r.timestamp BETWEEN l.timestamp - INTERVAL '30 seconds'");
-      expect(sql).toContain("AND l.timestamp + INTERVAL '30 seconds'");
+      expect(sql).toContain("r.timestamp BETWEEN l.timestamp - INTERVAL '30s'");
+      expect(sql).toContain("AND l.timestamp + INTERVAL '30s'");
     });
 
     it('should generate temporal constraints for LEFT JOIN', () => {
@@ -347,7 +347,7 @@ describe('TimeQLToSQLGenerator', () => {
 
       const sql = generator.generateSQL(query);
       expect(sql).toContain('LEFT JOIN');
-      expect(sql).toContain("r.timestamp BETWEEN l.timestamp - INTERVAL '1 minutes'");
+      expect(sql).toContain("r.timestamp BETWEEN l.timestamp - INTERVAL '1m'");
     });
 
     it('should generate temporal constraints for ANTI JOIN', () => {
@@ -367,7 +367,7 @@ describe('TimeQLToSQLGenerator', () => {
 
       const sql = generator.generateSQL(query);
       expect(sql).toContain('WHERE NOT EXISTS');
-      expect(sql).toContain("r.timestamp BETWEEN l.timestamp - INTERVAL '5 minutes'");
+      expect(sql).toContain("r.timestamp BETWEEN l.timestamp - INTERVAL '5m'");
     });
 
     it('should handle queries without temporal constraints', () => {
@@ -546,7 +546,7 @@ describe('TimeQLToSQLGenerator', () => {
       expect(statsSQL).toContain('MIN(l.timestamp) as min_timestamp');
       expect(statsSQL).toContain('MAX(l.timestamp) as max_timestamp');
       expect(statsSQL).toContain("l.source = 'application_logs'");
-      expect(statsSQL).toContain("INTERVAL '24 hours'");
+      expect(statsSQL).toContain("INTERVAL '24h'");
     });
 
     it('should generate stats SQL without time window when not specified', () => {
