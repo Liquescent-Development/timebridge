@@ -119,26 +119,90 @@ export class LokiAdapter implements DataSourceAdapter {
     query: string,
     options?: unknown
   ): AsyncIterable<LogEvent> {
+    const opts = (options as { 
+      timeRange?: string; 
+      absoluteTimeRange?: { start: string; end: string };
+      at?: string;
+    }) || {};
+    
     // Check if we should use Grafana proxy
     if (this.grafanaProxy) {
-      const timeRange = this.parseTimeRange((options as { timeRange?: string })?.timeRange || "5m");
+      const timeRange = this.parseTimeRange(opts);
       yield* await this.grafanaProxy.executeQuery(query, timeRange);
       return;
     }
 
-    // Direct Loki connection
-    const timeRange = (options as { timeRange?: string })?.timeRange || "5m";
+    // Direct Loki connection - for now, convert to old format for compatibility
+    const timeRangeStr = opts.timeRange || "5m";
 
     if (this.options.websocket) {
-      yield* this.createWebSocketStream(query, timeRange);
+      yield* this.createWebSocketStream(query, timeRangeStr);
     } else {
-      yield* this.createPollingStream(query, timeRange);
+      yield* this.createPollingStream(query, timeRangeStr, opts);
     }
   }
 
-  private parseTimeRange(timeRange: string): { from: Date; to: Date } {
+  private parseTimeRange(opts: { 
+    timeRange?: string; 
+    absoluteTimeRange?: { start: string; end: string };
+    at?: string;
+  }): { from: Date; to: Date } {
+    // Handle absolute time ranges
+    if (opts.absoluteTimeRange) {
+      return {
+        from: new Date(opts.absoluteTimeRange.start),
+        to: new Date(opts.absoluteTimeRange.end),
+      };
+    }
+    
+    // Handle @ modifier
+    if (opts.at) {
+      const atTime = new Date(opts.at);
+      if (opts.timeRange) {
+        // Range from specific time
+        const rangeMs = this.parseRelativeTimeRangeMs(opts.timeRange);
+        return {
+          from: atTime,
+          to: new Date(atTime.getTime() + rangeMs),
+        };
+      } else {
+        // Point in time (use 1 second window)
+        return {
+          from: atTime,
+          to: new Date(atTime.getTime() + 1000),
+        };
+      }
+    }
+    
+    // Legacy relative time range
+    const timeRange = opts.timeRange || "5m";
+    return this.parseRelativeTimeRange(timeRange);
+  }
+  
+  private parseRelativeTimeRangeMs(timeRange: string): number {
+    const match = timeRange.match(/^(\d+)([smhdw])$/);
+    
+    if (!match) {
+      // Default to 5 minutes
+      return 5 * 60 * 1000;
+    }
+
+    const value = parseInt(match[1]);
+    const unit = match[2];
+    const multipliers: Record<string, number> = {
+      s: 1000,
+      m: 60 * 1000,
+      h: 60 * 60 * 1000,
+      d: 24 * 60 * 60 * 1000,
+      w: 7 * 24 * 60 * 60 * 1000,
+    };
+
+    return value * (multipliers[unit] || 60000);
+  }
+  
+  private parseRelativeTimeRange(timeRange: string): { from: Date; to: Date } {
     const now = new Date();
-    const match = timeRange.match(/^(\d+)([smhd])$/);
+    const match = timeRange.match(/^(\d+)([smhdw])$/);
     
     if (!match) {
       // Default to 5 minutes
@@ -155,6 +219,7 @@ export class LokiAdapter implements DataSourceAdapter {
       m: 60 * 1000,
       h: 60 * 60 * 1000,
       d: 24 * 60 * 60 * 1000,
+      w: 7 * 24 * 60 * 60 * 1000,
     };
 
     const rangeMs = value * (multipliers[unit] || 60000);
@@ -399,20 +464,30 @@ export class LokiAdapter implements DataSourceAdapter {
 
   private async *createPollingStream(
     query: string,
-    _timeRange: string
+    _timeRange: string,
+    opts?: { 
+      timeRange?: string; 
+      absoluteTimeRange?: { start: string; end: string };
+      at?: string;
+    }
   ): AsyncIterable<LogEvent> {
     const controller = new AbortController();
     this.activeStreams.add(controller);
+    
+    // Parse time range for use in queries
+    const timeInfo = this.parseTimeRange(opts || { timeRange: _timeRange });
 
     try {
-      let lastTimestamp = Date.now() * 1000000; // Convert to nanoseconds
+      // Use parsed time range for initial query
+      let lastTimestamp = timeInfo.from.getTime() * 1000000; // Convert to nanoseconds
+      const endTime = timeInfo.to.getTime() * 1000000;
 
       while (!controller.signal.aborted) {
         const url = `${this.options.url}/loki/api/v1/query_range`;
         const params = new URLSearchParams({
           query,
           start: (lastTimestamp + 1).toString(),
-          end: (Date.now() * 1000000).toString(),
+          end: endTime.toString(),
           limit: "1000",
         });
 

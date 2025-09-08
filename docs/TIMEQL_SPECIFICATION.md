@@ -101,6 +101,63 @@ Anti-join - returns events from left stream that have no match in right stream.
 sourceA(query)[5m] unless on(session_id) sourceB(query)[5m]
 ```
 
+### Time Range Specifications
+
+#### Relative Time Ranges (Legacy)
+
+Query the last N units of time from now:
+
+```timeql
+graylog(service:api)[5m]    # Last 5 minutes
+loki({app="frontend"})[1h]  # Last 1 hour  
+events{service="auth"}[7d]  # Last 7 days
+```
+
+#### Absolute Time Ranges
+
+Query a specific time period using ISO 8601 timestamps:
+
+```timeql
+# Full ISO timestamps with UTC
+graylog(service:api)[2024-01-15T10:00:00Z to 2024-01-15T18:00:00Z]
+
+# With timezone offsets
+loki({app="frontend"})[2024-01-15T10:00:00-07:00 to 2024-01-15T18:00:00-07:00]
+
+# Date-only (defaults to midnight UTC)
+events{service="auth"}[2024-01-15 to 2024-01-16]
+```
+
+#### Mixed Relative/Absolute Ranges
+
+Combine absolute and relative time references:
+
+```timeql
+# From absolute time to now
+graylog(service:api)[2024-01-15T10:00:00Z to now]
+
+# From relative past to absolute time
+loki({app="frontend"})[1d ago to 2024-01-15T18:00:00Z]
+
+# From absolute time plus duration
+events{}[2024-01-15T10:00:00Z to +8h]
+```
+
+#### @ Modifier (Point-in-Time)
+
+Query at or from a specific timestamp:
+
+```timeql
+# At specific time (point query)
+graylog(service:api) @ 2024-01-15T10:00:00Z
+
+# Range from specific time  
+loki({app="frontend"})[1h] @ 2024-01-15T10:00:00Z  # 1 hour from timestamp
+
+# Combined with absolute range
+events{}[2024-01-15T09:00:00Z to 2024-01-15T10:00:00Z] @ 2024-01-15T10:00:00Z
+```
+
 ### Time Operators
 
 #### `within(duration)`

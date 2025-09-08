@@ -96,11 +96,9 @@ export class TimeQLToSQLGenerator {
     const conditions = [];
     
     // Add time range filter
-    if (stream.timeRange) {
-      const timeWindow = this.parseTimeWindow(stream.timeRange);
-      if (timeWindow) {
-        conditions.push(`timestamp >= CURRENT_TIMESTAMP - INTERVAL '${timeWindow}'`);
-      }
+    const timeCondition = this.generateTimeCondition(stream);
+    if (timeCondition) {
+      conditions.push(timeCondition);
     }
     
     // Parse label selectors if present
@@ -200,7 +198,7 @@ export class TimeQLToSQLGenerator {
    * Generate a CTE for a stream
    */
   private generateStreamCTE(cteName: string, stream: any): string {
-    const timeWindow = this.parseTimeWindow(stream.timeRange);
+    const timeCondition = this.generateTimeCondition(stream);
     
     let cte = `${cteName} AS (\n`;
     cte += `  SELECT \n`;
@@ -210,10 +208,9 @@ export class TimeQLToSQLGenerator {
     cte += `  WHERE source = '${stream.source}'\n`;
     cte += `    AND stream = '${cteName}'\n`;  // Filter by stream identifier to separate left/right
     
-    // Add time window
-    if (timeWindow) {
-      cte += `    AND timestamp >= CURRENT_TIMESTAMP - INTERVAL '${timeWindow}'\n`;
-      cte += `    AND timestamp <= CURRENT_TIMESTAMP\n`;
+    // Add time condition
+    if (timeCondition) {
+      cte += `    AND ${timeCondition}\n`;
     }
     
     // IMPORTANT: Do NOT add selector filters here!
@@ -522,12 +519,35 @@ export class TimeQLToSQLGenerator {
 
   /**
    * Parse time window string (e.g., "5m", "1h", "7d")
+   * For absolute time ranges, returns null (handled separately)
    */
-  private parseTimeWindow(timeRange: string | undefined): string | null {
+  private parseTimeWindow(stream: any): string | null {
+    // Handle absolute time ranges differently
+    if (stream.timeRangeType === 'absolute') {
+      return null; // Will be handled in generateTimeCondition
+    }
+    
+    // Handle @ modifier with relative range
+    if (stream.at && stream.timeRange) {
+      return this.parseRelativeTimeRange(stream.timeRange);
+    }
+    
+    // Legacy relative time range
+    if (stream.timeRange) {
+      return this.parseRelativeTimeRange(stream.timeRange);
+    }
+    
+    return null;
+  }
+  
+  /**
+   * Parse relative time range to PostgreSQL interval format
+   */
+  private parseRelativeTimeRange(timeRange: string | undefined): string | null {
     if (!timeRange) return null;
     
     // Convert shorthand to PostgreSQL interval format
-    const match = timeRange.match(/^(\d+)([smhd])$/);
+    const match = timeRange.match(/^(\d+)([smhdw])$/);
     if (!match) return null;
     
     const [, value, unit] = match;
@@ -536,9 +556,99 @@ export class TimeQLToSQLGenerator {
       'm': 'minutes',
       'h': 'hours',
       'd': 'days',
+      'w': 'weeks',
     };
     
     return `${value} ${unitMap[unit] || 'minutes'}`;
+  }
+  
+  /**
+   * Generate time condition SQL for a stream
+   */
+  private generateTimeCondition(stream: any): string | null {
+    // Handle absolute time ranges
+    if (stream.timeRangeType === 'absolute' && stream.start && stream.end) {
+      const startTime = this.formatTimePoint(stream.start);
+      const endTime = this.formatTimePoint(stream.end);
+      
+      if (startTime && endTime) {
+        return `timestamp >= TIMESTAMP '${startTime}' AND timestamp <= TIMESTAMP '${endTime}'`;
+      }
+    }
+    
+    // Handle @ modifier
+    if (stream.at) {
+      if (stream.timeRange) {
+        // Range from specific time
+        const interval = this.parseRelativeTimeRange(stream.timeRange);
+        return `timestamp >= TIMESTAMP '${stream.at}' AND timestamp <= TIMESTAMP '${stream.at}' + INTERVAL '${interval}'`;
+      } else {
+        // Point in time
+        return `timestamp = TIMESTAMP '${stream.at}'`;
+      }
+    }
+    
+    // Handle relative time ranges - both new and legacy format
+    if (stream.timeRange && typeof stream.timeRange === 'string') {
+      // Legacy format - just a string like "5m"
+      const interval = this.parseRelativeTimeRange(stream.timeRange);
+      if (interval) {
+        return `timestamp >= CURRENT_TIMESTAMP - INTERVAL '${interval}'\n    AND timestamp <= CURRENT_TIMESTAMP`;
+      }
+    }
+    
+    // Try new format with parseTimeWindow
+    const timeWindow = this.parseTimeWindow(stream);
+    if (timeWindow) {
+      return `timestamp >= CURRENT_TIMESTAMP - INTERVAL '${timeWindow}'`;
+    }
+    
+    return null;
+  }
+  
+  /**
+   * Format a time point for SQL
+   */
+  private formatTimePoint(point: any): string | null {
+    if (!point) return null;
+    
+    switch (point.type) {
+      case 'absolute':
+        return point.value; // Already in ISO format
+      case 'now':
+        return new Date().toISOString();
+      case 'relative':
+        const interval = this.parseRelativeTimeRange(point.value);
+        if (!interval) return null;
+        
+        // For SQL, we need to calculate the actual timestamp
+        const ms = this.intervalToMs(interval);
+        const time = point.direction === 'ago' 
+          ? new Date(Date.now() - ms)
+          : new Date(Date.now() + ms);
+        return time.toISOString();
+      default:
+        return null;
+    }
+  }
+  
+  /**
+   * Convert PostgreSQL interval string to milliseconds
+   */
+  private intervalToMs(interval: string): number {
+    const match = interval.match(/^(\d+)\s+(\w+)$/);
+    if (!match) return 0;
+    
+    const [, value, unit] = match;
+    const multipliers: Record<string, number> = {
+      'seconds': 1000,
+      'minutes': 60 * 1000,
+      'hours': 60 * 60 * 1000,
+      'days': 24 * 60 * 60 * 1000,
+      'weeks': 7 * 24 * 60 * 60 * 1000,
+    };
+    
+    return parseInt(value) * (multipliers[unit] || 0);
   }
 
   /**
@@ -597,7 +707,7 @@ export class TimeQLToSQLGenerator {
       sql += `  WHERE ${leftJoinExpr} = ${rightJoinExpr}\n`;
       
       if (temporal) {
-        const temporalWindow = this.parseTimeWindow(temporal);
+        const temporalWindow = this.parseRelativeTimeRange(temporal);
         sql += `    AND r.timestamp BETWEEN l.timestamp - INTERVAL '${temporalWindow}'\n`;
         sql += `                         AND l.timestamp + INTERVAL '${temporalWindow}'\n`;
       }
@@ -610,7 +720,7 @@ export class TimeQLToSQLGenerator {
       
       // Add temporal constraints
       if (temporal) {
-        const temporalWindow = this.parseTimeWindow(temporal);
+        const temporalWindow = this.parseRelativeTimeRange(temporal);
         sql += `  AND r.timestamp BETWEEN l.timestamp - INTERVAL '${temporalWindow}'\n`;
         sql += `                       AND l.timestamp + INTERVAL '${temporalWindow}'\n`;
       }
@@ -643,7 +753,7 @@ export class TimeQLToSQLGenerator {
   generateStatsSQL(query: ParsedQuery): string {
     const leftStream = query.leftStream;
     const rightStream = query.rightStream;
-    const timeWindow = this.parseTimeWindow(leftStream.timeRange);
+    const timeCondition = this.generateTimeCondition(leftStream);
     
     let sql = 'SELECT\n';
     sql += '  COUNT(DISTINCT l.request_id) as unique_keys,\n';
@@ -653,8 +763,8 @@ export class TimeQLToSQLGenerator {
     sql += `FROM ${this.options.tableName} l\n`;
     sql += `WHERE l.source = '${leftStream.source}'\n`;
     
-    if (timeWindow) {
-      sql += `  AND l.timestamp >= CURRENT_TIMESTAMP - INTERVAL '${timeWindow}'\n`;
+    if (timeCondition) {
+      sql += `  AND ${timeCondition.replace('timestamp', 'l.timestamp')}\n`;
     }
     
     return sql;

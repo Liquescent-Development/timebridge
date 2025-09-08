@@ -94,8 +94,7 @@ export class SQLBuilder {
           conditions: [
             { type: 'comparison', expression: `source = '${leftSource}'` },
             { type: 'comparison', expression: `stream = 'left_stream'` },
-            { type: 'comparison', expression: `timestamp >= CURRENT_TIMESTAMP - INTERVAL '${query.leftStream.timeRange}'` },
-            { type: 'comparison', expression: `timestamp <= CURRENT_TIMESTAMP` }
+            ...this.buildTimeConditions(query.leftStream)
           ]
         }
       }
@@ -117,8 +116,7 @@ export class SQLBuilder {
             conditions: [
               { type: 'comparison', expression: `source = '${rightSource}'` },
               { type: 'comparison', expression: `stream = 'right_stream'` },
-              { type: 'comparison', expression: `timestamp >= CURRENT_TIMESTAMP - INTERVAL '${query.rightStream.timeRange}'` },
-              { type: 'comparison', expression: `timestamp <= CURRENT_TIMESTAMP` }
+              ...this.buildTimeConditions(query.rightStream)
             ]
           }
         }
@@ -328,5 +326,48 @@ export class SQLBuilder {
     
     sql += '\n)';
     return sql;
+  }
+  
+  private buildTimeConditions(stream: any): any[] {
+    const conditions: any[] = [];
+    
+    // Check for absolute time range
+    if (stream.timeRangeType === 'absolute' && stream.start && stream.end) {
+      // Handle absolute time range
+      if (stream.start.type === 'absolute' && stream.end.type === 'absolute') {
+        conditions.push({
+          type: 'comparison',
+          expression: `timestamp >= TIMESTAMP '${stream.start.value}'`
+        });
+        conditions.push({
+          type: 'comparison',
+          expression: `timestamp <= TIMESTAMP '${stream.end.value}'`
+        });
+      }
+    } else if (stream.timeRange) {
+      // Handle relative time range
+      conditions.push({
+        type: 'comparison',
+        expression: `timestamp >= CURRENT_TIMESTAMP - INTERVAL '${stream.timeRange}'`
+      });
+      conditions.push({
+        type: 'comparison',
+        expression: `timestamp <= CURRENT_TIMESTAMP`
+      });
+    } else {
+      // This should not happen if validation is working correctly
+      console.warn('Warning: No time range specified for stream in SQL generation');
+      // Add a reasonable default to prevent SQL errors (last hour)
+      conditions.push({
+        type: 'comparison',
+        expression: `timestamp >= CURRENT_TIMESTAMP - INTERVAL '1 hour'`
+      });
+      conditions.push({
+        type: 'comparison',
+        expression: `timestamp <= CURRENT_TIMESTAMP`
+      });
+    }
+    
+    return conditions;
   }
 }

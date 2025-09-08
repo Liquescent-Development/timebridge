@@ -281,7 +281,7 @@ export class QueryRouter extends EventEmitter {
     const leftStream = leftAdapter.createStream(
       query.leftStream.selector,
       { 
-        timeRange: query.leftStream.timeRange,
+        ...this.convertTimeRangeForAdapter(query.leftStream),
         streamName: query.leftStream.stream
       }
     );
@@ -290,7 +290,7 @@ export class QueryRouter extends EventEmitter {
       rightAdapter.createStream(
         query.rightStream.selector,
         { 
-          timeRange: query.rightStream.timeRange,
+          ...this.convertTimeRangeForAdapter(query.rightStream),
           streamName: query.rightStream.stream
         }
       ) : null;
@@ -496,11 +496,23 @@ export class QueryRouter extends EventEmitter {
       
       try {
         // Stream parsed CSV events directly
+        // Convert time range for adapter if needed
+        const adapterTimeRange = this.convertTimeRangeForAdapter(streamConfig);
+        
+        // Ensure we have a time range specified
+        if (!streamConfig.timeRange && !adapterTimeRange.absoluteTimeRange) {
+          throw new Error(
+            `No time range specified for stream ${streamId}. ` +
+            `Query must include either a relative time range (e.g., [5m]) or absolute time range (e.g., [2025-09-01T00:00:00Z to 2025-09-02T00:00:00Z])`
+          );
+        }
+        
         const eventStream = adapter.streamCSVAsEvents(
           streamConfig.selector,
           streamConfig.timeRange,
           joinKeys,
-          streamConfig.source
+          streamConfig.source,
+          adapterTimeRange.absoluteTimeRange
         );
         
         // Transform events to add stream identifier and track progress
@@ -1128,11 +1140,24 @@ export class QueryRouter extends EventEmitter {
           }, "About to create CSV stream");
           
           try {
+            // Convert time range for adapter if needed
+            const adapterTimeRange = this.convertTimeRangeForAdapter(streamConfig);
+            
+            // For absolute time ranges, timeRange might be undefined - that's okay
+            // But we need either timeRange or absoluteTimeRange
+            if (!streamConfig.timeRange && !adapterTimeRange.absoluteTimeRange) {
+              throw new Error(
+                `No time range specified for stream. ` +
+                `Query must include either a relative time range (e.g., [5m]) or absolute time range (e.g., [2025-09-01T00:00:00Z to 2025-09-02T00:00:00Z])`
+              );
+            }
+            
             batchStream = adapter.streamCSVAsEvents(
               batchQuery,
-              streamConfig.timeRange,
+              streamConfig.timeRange, // Can be undefined if using absolute time range
               query.joinKeys || [],
-              streamConfig.source
+              streamConfig.source,
+              adapterTimeRange.absoluteTimeRange
             );
             
             optimizerLogger.debug({ 
@@ -1912,25 +1937,123 @@ export class QueryRouter extends EventEmitter {
    * Calculate time window in milliseconds
    */
   private calculateTimeWindow(query: ParsedQuery): number {
-    const leftWindow = this.parseTimeRange(query.leftStream.timeRange);
+    const leftWindow = this.parseTimeRange(query.leftStream);
     const rightWindow = query.rightStream ? 
-      this.parseTimeRange(query.rightStream.timeRange) : 0;
+      this.parseTimeRange(query.rightStream) : 0;
     
     return Math.max(leftWindow, rightWindow);
   }
 
   /**
-   * Parse time range string to milliseconds
+   * Convert time range from parser format to adapter format
    */
-  private parseTimeRange(timeRange?: string): number {
+  private convertTimeRangeForAdapter(stream: any): any {
+    // Handle absolute time ranges
+    if (stream.timeRangeType === 'absolute' && stream.start && stream.end) {
+      return {
+        timeRange: stream.timeRange, // Keep legacy format for backwards compatibility
+        absoluteTimeRange: {
+          start: this.formatTimePointForAdapter(stream.start),
+          end: this.formatTimePointForAdapter(stream.end)
+        }
+      };
+    }
+    
+    // Handle @ modifier
+    if (stream.at) {
+      return {
+        timeRange: stream.timeRange,
+        at: stream.at
+      };
+    }
+    
+    // Legacy relative time range
+    return {
+      timeRange: stream.timeRange
+    };
+  }
+  
+  /**
+   * Format a time point for adapter consumption
+   */
+  private formatTimePointForAdapter(point: any): string | null {
+    if (!point) return null;
+    
+    switch (point.type) {
+      case 'absolute':
+        return point.value; // Already in ISO format
+      case 'now':
+        return new Date().toISOString();
+      case 'relative':
+        const offset = this.parseRelativeTimeRange(point.value);
+        const time = point.direction === 'ago' 
+          ? new Date(Date.now() - offset)
+          : new Date(Date.now() + offset);
+        return time.toISOString();
+      default:
+        return null;
+    }
+  }
+  
+  /**
+   * Parse time range to milliseconds
+   * Handles both relative ranges (e.g., "5m") and absolute ranges
+   */
+  private parseTimeRange(stream: any): number {
+    // Handle absolute time ranges
+    if (stream.timeRangeType === 'absolute' && stream.start && stream.end) {
+      const start = this.parseTimePoint(stream.start);
+      const end = this.parseTimePoint(stream.end);
+      return Math.abs(end - start);
+    }
+    
+    // Handle @ modifier with relative range
+    if (stream.at && stream.timeRange) {
+      return this.parseRelativeTimeRange(stream.timeRange);
+    }
+    
+    // Handle legacy relative time ranges
+    if (stream.timeRange) {
+      return this.parseRelativeTimeRange(stream.timeRange);
+    }
+    
+    return 0;
+  }
+  
+  /**
+   * Parse a time point to milliseconds since epoch
+   */
+  private parseTimePoint(point: any): number {
+    if (!point) return Date.now();
+    
+    switch (point.type) {
+      case 'absolute':
+        return new Date(point.value).getTime();
+      case 'now':
+        return Date.now();
+      case 'relative':
+        const offset = this.parseRelativeTimeRange(point.value);
+        return point.direction === 'ago' 
+          ? Date.now() - offset 
+          : Date.now() + offset;
+      default:
+        return Date.now();
+    }
+  }
+  
+  /**
+   * Parse relative time range string to milliseconds
+   */
+  private parseRelativeTimeRange(timeRange?: string): number {
     if (!timeRange) return 0;
     
-    const match = timeRange.match(/^(\d+)([smhd])$/);
+    const match = timeRange.match(/^(\d+)([smhdw])$/);
     if (!match) return 0;
     
     const [, value, unit] = match;
     const multipliers: Record<string, number> = {
       's': 1000,
+      'w': 7 * 24 * 60 * 60 * 1000,
       'm': 60 * 1000,
       'h': 60 * 60 * 1000,
       'd': 24 * 60 * 60 * 1000

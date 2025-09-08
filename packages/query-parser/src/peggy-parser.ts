@@ -75,9 +75,16 @@ interface ParsedQueryExtended extends ParsedQuery {
 }
 
 export class PeggyQueryParser {
+  /**
+   * Parse query and return raw output from the Peggy parser
+   */
+  parseRaw(query: string): ParseResult {
+    return generatedParser.parse(query);
+  }
+
   parse(query: string): ParsedQueryExtended {
     try {
-      const result = generatedParser.parse(query);
+      const result = this.parseRaw(query);
       return this.transformParseResult(result);
     } catch (error) {
       if (error && typeof error === "object" && "location" in error) {

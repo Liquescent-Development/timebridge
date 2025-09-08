@@ -244,6 +244,8 @@ export class GraylogAdapter implements DataSourceAdapter {
     const opts =
       (options as { 
         timeRange?: string; 
+        absoluteTimeRange?: { start: string; end: string };
+        at?: string;
         continuous?: boolean; 
         correlationKeys?: string[]; 
         sourceName?: string; 
@@ -251,6 +253,23 @@ export class GraylogAdapter implements DataSourceAdapter {
         abortSignal?: AbortSignal;
         bloomFilter?: any;
       }) || {};
+    
+    // Debug log the incoming parameters
+    console.log(`[Graylog Adapter] createStream() called with:`, {
+      query,
+      options: {
+        timeRange: opts.timeRange,
+        absoluteTimeRange: opts.absoluteTimeRange,
+        at: opts.at,
+        continuous: opts.continuous,
+        correlationKeys: opts.correlationKeys,
+        sourceName: opts.sourceName,
+        streamName: opts.streamName,
+        hasAbortSignal: !!opts.abortSignal,
+        hasBloomFilter: !!opts.bloomFilter
+      }
+    });
+    
     const timeRange = opts.timeRange || "5m";
     const continuous = opts.continuous === true; // Default to false for correlation queries
     const correlationKeys = opts.correlationKeys;
@@ -295,22 +314,50 @@ export class GraylogAdapter implements DataSourceAdapter {
     } else {
       // For correlation queries with time windows, fetch historical data once
       // This aligns with LogQL/PromQL semantics where [5m] means "last 5 minutes of data"
-      yield* this.createHistoricalStream(query, timeRange);
+      yield* this.createHistoricalStream(query, timeRange, opts.absoluteTimeRange, opts.at);
     }
   }
 
 
   private async *createHistoricalStream(
     query: string,
-    timeRange: string
+    timeRange: string,
+    absoluteTimeRange?: { start: string; end: string },
+    at?: string
   ): AsyncIterable<LogEvent> {
     const controller = new AbortController();
     this.activeStreams.add(controller);
 
     try {
-      const timeWindowMs = this.parseTimeRange(timeRange);
-      const now = new Date();
-      const from = new Date(now.getTime() - timeWindowMs);
+      let from: Date;
+      let to: Date;
+      let timeWindowMs: number;
+      
+      if (absoluteTimeRange) {
+        // Use absolute time range
+        from = new Date(absoluteTimeRange.start);
+        to = new Date(absoluteTimeRange.end);
+        timeWindowMs = to.getTime() - from.getTime();
+      } else if (at) {
+        // Use @ modifier
+        const atTime = new Date(at);
+        if (timeRange) {
+          // Range from specific time
+          timeWindowMs = this.parseTimeRange(timeRange);
+          from = atTime;
+          to = new Date(atTime.getTime() + timeWindowMs);
+        } else {
+          // Point in time (use 1 second window)
+          from = atTime;
+          to = new Date(atTime.getTime() + 1000);
+          timeWindowMs = 1000;
+        }
+      } else {
+        // Legacy relative time range
+        timeWindowMs = this.parseTimeRange(timeRange);
+        to = new Date();
+        from = new Date(to.getTime() - timeWindowMs);
+      }
 
       // Get effective stream ID once at the start
       const effectiveStreamId = await this.getEffectiveStreamId();
@@ -320,7 +367,7 @@ export class GraylogAdapter implements DataSourceAdapter {
         // The API will return all messages matching the query up to the limit
         const limit = this.options.maxResults || 100000000; // Default to 100M for DuckDB scale
         
-        queryLogger.info({ limit, timeRange }, "Fetching messages from time window");
+        queryLogger.info({ limit, timeRange, absoluteTimeRange }, "Fetching messages from time window");
         
         // Optimize fields if correlation keys are provided
         let fieldsParam = "_id,message,timestamp,source,*";
@@ -330,10 +377,21 @@ export class GraylogAdapter implements DataSourceAdapter {
           queryLogger.debug({ fields: fieldsParam }, "Optimized fields for correlation");
         }
 
+        // Debug log the time range being used
+        console.log(`[Graylog v6] Time range calculation:`, {
+          absoluteTimeRange,
+          from: from.toISOString(),
+          to: to.toISOString(),
+          fromMs: from.getTime(),
+          toMs: to.getTime(),
+          timeWindowMs,
+          rangeSeconds: Math.floor(timeWindowMs / 1000)
+        });
+
         const searchParams: Record<string, unknown> = {
           query: query,
           from: from.toISOString(),
-          to: now.toISOString(),
+          to: to.toISOString(),
           limit: limit,  // This is the total limit, not per-page
           sort: "timestamp:asc",
           fields: fieldsParam,
@@ -476,7 +534,7 @@ export class GraylogAdapter implements DataSourceAdapter {
           const searchParams: Record<string, unknown> = {
             query: this.convertToGraylogQuery(query),
             from: from.toISOString(),
-            to: now.toISOString(),
+            to: to.toISOString(),
             limit: batchSize,
             offset: offset,
             sort: "timestamp:asc",
@@ -660,8 +718,17 @@ export class GraylogAdapter implements DataSourceAdapter {
     query: string,
     timeRange: string,
     joinKeys: string[] = [],
-    sourceName?: string
+    sourceName?: string,
+    absoluteTimeRange?: { start: string; end: string }
   ): AsyncIterable<LogEvent> {
+    console.log(`[Graylog CSV] streamCSVAsEvents called with:`, {
+      query,
+      timeRange,
+      absoluteTimeRange,
+      joinKeys,
+      sourceName
+    });
+    
     const parsedQuery = this.parser.parse(query);
     const queryFields = this.extractFieldsFromQuery(parsedQuery as any);
     
@@ -669,11 +736,13 @@ export class GraylogAdapter implements DataSourceAdapter {
       parsedQuery as any,
       timeRange,
       queryFields,
-      query
+      query,
+      absoluteTimeRange
     );
 
     csvLogger.debug({ requestedFields: queryFields }, "Parsed Graylog query");
     csvLogger.debug({ url: `${this.options.url}/api/views/search/messages`, requestBody }, "Executing CSV stream request");
+    console.log(`[Graylog CSV] Request body:`, JSON.stringify(requestBody, null, 2));
     
     const url = `${this.options.url}/api/views/search/messages`;
     const headers: Record<string, string> = {
@@ -982,18 +1051,43 @@ export class GraylogAdapter implements DataSourceAdapter {
     parsedQuery: any,
     timeRange: string,
     queryFields: string[],
-    originalQuery?: string
+    originalQuery?: string,
+    absoluteTimeRange?: { start: string; end: string }
   ): any {
     // Build the request body for Graylog v6 messages export API
-    const timeRangeMs = this.parseTimeRange(timeRange);
+    let timerangeObj: any;
+    
+    if (absoluteTimeRange) {
+      // Use absolute time range
+      const fromMs = new Date(absoluteTimeRange.start).getTime();
+      const toMs = new Date(absoluteTimeRange.end).getTime();
+      timerangeObj = {
+        type: "absolute",
+        from: fromMs,
+        to: toMs
+      };
+      console.log(`[Graylog CSV] Using absolute time range: ${absoluteTimeRange.start} to ${absoluteTimeRange.end} (${fromMs} to ${toMs})`);
+    } else if (timeRange) {
+      // Use relative time range
+      const timeRangeMs = this.parseTimeRange(timeRange);
+      timerangeObj = {
+        type: "relative",
+        range: Math.floor(timeRangeMs / 1000) // Convert to seconds
+      };
+      console.log(`[Graylog CSV] Using relative time range: ${timeRange} (${Math.floor(timeRangeMs / 1000)} seconds)`);
+    } else {
+      // No time range provided - this is an error
+      throw new Error(
+        `No time range specified for Graylog query. ` +
+        `Query must include either a relative time range (e.g., [5m]) or absolute time range (e.g., [2025-09-01T00:00:00Z to 2025-09-02T00:00:00Z])`
+      );
+    }
+    
     const requestBody: any = {
       query_string: {
         query_string: originalQuery || parsedQuery.query || "*"
       },
-      timerange: {
-        type: "relative",
-        range: Math.floor(timeRangeMs / 1000) // Convert to seconds, use 'range' field
-      },
+      timerange: timerangeObj,
       limit: this.options.maxResults || 10000000
     };
     
@@ -1794,9 +1888,6 @@ export class GraylogAdapter implements DataSourceAdapter {
   ): Promise<GraylogSearchResponse> {
     const url = `${this.options.url}/api/views/search/messages`;
 
-    // Calculate time window in seconds for relative timerange
-    const range = (params.range as number) || 300; // Default 5 minutes
-
     // Convert query for Graylog v6 - handle special cases
     let query = (params.query as string) || "";
 
@@ -1815,16 +1906,35 @@ export class GraylogAdapter implements DataSourceAdapter {
     const requestedLimit = (params.limit as number) || 100000000;
     console.log(`[Graylog v6] Requesting up to ${requestedLimit} events`);
     
+    // Build timerange based on parameters
+    let timerange: any;
+    if (params.from && params.to) {
+      // Absolute time range - convert ISO strings to Unix milliseconds
+      const fromTime = new Date(params.from as string).getTime();
+      const toTime = new Date(params.to as string).getTime();
+      timerange = {
+        type: "absolute",
+        from: fromTime,
+        to: toTime
+      };
+      console.log(`[Graylog v6] Using absolute time range: ${params.from} to ${params.to} (${fromTime} to ${toTime})`);
+    } else {
+      // Relative time range
+      const range = (params.range as number) || 300; // Default 5 minutes
+      timerange = {
+        type: "relative",
+        range: range // seconds
+      };
+      console.log(`[Graylog v6] Using relative time range: ${range} seconds`);
+    }
+    
     // Graylog v6 views API expects this exact structure with nested query_string
     // This is an export endpoint that can stream millions of events
     const requestBody: any = {
       query_string: {
         query_string: query,
       },
-      timerange: {
-        type: "relative",
-        range: range // seconds
-      },
+      timerange: timerange,
       limit: requestedLimit,  // Use the full requested limit - this endpoint can handle it!
       // Note: Not specifying chunk_size to let Graylog use its default
       // chunk_size appears to be constrained by OpenSearch's max_result_window (10K)

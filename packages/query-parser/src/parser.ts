@@ -1,11 +1,36 @@
 // Local type definitions to avoid circular dependency
 export type JoinType = "and" | "or" | "unless";
 
+export interface TimePoint {
+  type: 'absolute' | 'relative' | 'now';
+  value?: string;
+  direction?: 'ago' | 'future';
+}
+
+export interface AbsoluteTimeRange {
+  timeRangeType: 'absolute';
+  start: TimePoint;
+  end: TimePoint;
+  at?: string;  // @ modifier timestamp
+}
+
+export interface RelativeTimeRange {
+  timeRangeType: 'relative';
+  timeRange: string;
+  at?: string;  // @ modifier timestamp
+}
+
+export type TimeSpecification = AbsoluteTimeRange | RelativeTimeRange | { at: string };
+
 export interface StreamQuery {
   type?: 'database' | 'stream';  // Optional type to distinguish database vs stream queries
   source: string;
   selector: string;
-  timeRange: string;
+  timeRange?: string;  // Legacy relative time range
+  timeRangeType?: 'relative' | 'absolute';  // New time range type indicator
+  start?: TimePoint;  // For absolute ranges
+  end?: TimePoint;    // For absolute ranges
+  at?: string;        // @ modifier timestamp
   alias?: string;
   stream?: string;  // Optional stream name for source:stream syntax
   selectorParsed?: any;  // Parsed selector for more complex queries

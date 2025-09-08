@@ -104,37 +104,32 @@ StreamExpr
 
 // Query persisted data in DuckDB
 DatabaseExpr
-  = "events" selector:LabelSelector? _ "[" _ duration:Duration _ "]" {
-      return {
+  = "events" selector:LabelSelector? _ timeSpec:TimeSpecification {
+      return Object.assign({
         type: 'database',
         source: 'events',  // Special source indicating persisted data
         selector: selector ? selector.text : '{}',
-        timeRange: duration,
         selectorParsed: selector ? selector.parsed : { type: 'labels', matchers: [] }
-      };
+      }, timeSpec);
     }
 
 // Query from external sources (existing behavior)
 SourceStreamExpr
-  = source:DataSourceNameWithStream _ "(" _ selector:Selector _ ")" _ "[" _ duration:Duration _ "]" {
+  = source:DataSourceNameWithStream _ "(" _ selector:Selector _ ")" _ timeSpec:TimeSpecification {
       // Check if source contains a colon for stream specification
       const colonIndex = source.indexOf(':');
-      if (colonIndex > -1) {
-        return {
-          source: source.substring(0, colonIndex),
-          stream: source.substring(colonIndex + 1),
-          selector: selector.text,
-          timeRange: duration,
-          selectorParsed: selector.parsed
-        };
-      } else {
-        return {
-          source,
-          selector: selector.text,
-          timeRange: duration,
-          selectorParsed: selector.parsed
-        };
-      }
+      const baseResult = colonIndex > -1 ? {
+        source: source.substring(0, colonIndex),
+        stream: source.substring(colonIndex + 1),
+        selector: selector.text,
+        selectorParsed: selector.parsed
+      } : {
+        source,
+        selector: selector.text,
+        selectorParsed: selector.parsed
+      };
+      
+      return Object.assign(baseResult, timeSpec);
     }
 
 // Data source names with optional stream specification
@@ -418,11 +413,91 @@ Filter
       return `{${matchers.map(m => m.text).join(',')}}`;
     }
 
+// Time specification: handles both relative and absolute time ranges
+TimeSpecification
+  = "[" _ range:TimeRange _ "]" at:AtModifier? {
+      if (at) {
+        return Object.assign(range, { at });
+      }
+      return range;
+    }
+  / at:AtModifier {
+      return { at };
+    }
+
+// Time range: relative, absolute, or mixed
+TimeRange
+  = start:AbsoluteOrRelativeTimePoint _ "to" _ end:AbsoluteOrRelativeTimePoint {
+      // This is an absolute or mixed range with explicit start and end
+      return {
+        timeRangeType: 'absolute',
+        start,
+        end
+      };
+    }
+  / duration:SimpleDuration {
+      // This is a simple relative range (just duration like "5m")
+      return {
+        timeRange: duration,
+        timeRangeType: 'relative'
+      };
+    }
+
+// Duration that can only appear as a simple range (not before "to")
+SimpleDuration
+  = num:Number unit:TimeUnit !(_ "to") { return num + unit; }
+
+// Time points that can be used in absolute ranges
+AbsoluteOrRelativeTimePoint
+  = timestamp:ISOTimestamp { return { type: 'absolute', value: timestamp }; }
+  / "now" { return { type: 'now' }; }
+  / num:Number unit:TimeUnit _ "ago" { return { type: 'relative', value: num + unit, direction: 'ago' }; }
+  / "+" num:Number unit:TimeUnit { return { type: 'relative', value: num + unit, direction: 'future' }; }
+
+// @ modifier for point-in-time queries
+AtModifier
+  = _ "@" _ timestamp:ISOTimestamp {
+      return timestamp;
+    }
+
+// ISO 8601 timestamp (simplified - handles common formats)
+ISOTimestamp
+  = date:DatePart "T" time:TimePart tz:TimeZone? {
+      return date + "T" + time + (tz || "Z");
+    }
+  / date:DatePart {
+      return date + "T00:00:00Z";  // Default to midnight UTC
+    }
+
+DatePart
+  = year:Year "-" month:Month "-" day:Day {
+      return year + "-" + month + "-" + day;
+    }
+
+TimePart
+  = hour:Hour ":" minute:Minute ":" second:Second fraction:FractionalSecond? {
+      return hour + ":" + minute + ":" + second + (fraction || "");
+    }
+
+TimeZone
+  = "Z" { return "Z"; }
+  / sign:[+-] hour:Hour ":" minute:Minute {
+      return sign + hour + ":" + minute;
+    }
+
+Year = [0-9][0-9][0-9][0-9] { return text(); }
+Month = [0-1][0-9] { return text(); }
+Day = [0-3][0-9] { return text(); }
+Hour = [0-2][0-9] { return text(); }
+Minute = [0-5][0-9] { return text(); }
+Second = [0-5][0-9] { return text(); }
+FractionalSecond = "." [0-9]+ { return text(); }
+
 Duration
   = num:Number unit:TimeUnit { return num + unit; }
 
 TimeUnit
-  = "s" / "m" / "h" / "d"
+  = "s" / "m" / "h" / "d" / "w"
 
 String
   = '"' chars:DoubleStringChar* '"' {
