@@ -16,8 +16,12 @@ CLAUDE.md
 .claude/
 influxql-spec.md
 
-# Test files for manual testing
+# Test, debug, and fix files for manual testing
 test-*.js
 test-*.ts
+debug-*.js
+debug-*.ts
+fix-*.js
+fix-*.ts
 !packages/*/src/**/*.test.ts
 !packages/*/src/**/*.test.js
