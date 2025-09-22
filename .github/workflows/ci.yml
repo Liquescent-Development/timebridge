@@ -230,7 +230,7 @@ jobs:
 
       - name: Comment benchmark results
         if: github.event_name == 'pull_request'
-        uses: actions/github-script@v6
+        uses: actions/github-script@v8
         continue-on-error: true
         with:
           script: |
