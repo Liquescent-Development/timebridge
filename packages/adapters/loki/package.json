@@ -21,7 +21,7 @@
     "@liquescent/log-correlator-core": "file:../../core",
     "node-fetch": "^2.7.0",
     "socks-proxy-agent": "^8.0.5",
-    "ws": "^8.14.0"
+    "ws": "^8.19.0"
   },
   "devDependencies": {
     "@types/jest": "^29.5.0",
