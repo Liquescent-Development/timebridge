@@ -22,7 +22,7 @@
   "license": "AGPL-3.0",
   "dependencies": {
     "@liquescent/log-correlator-query-parser": "file:../query-parser",
-    "eventemitter3": "^5.0.1",
+    "eventemitter3": "^5.0.4",
     "lru-cache": "^11.1.0"
   },
   "devDependencies": {
