@@ -22,7 +22,7 @@
   "license": "AGPL-3.0",
   "dependencies": {
     "@liquescent/log-correlator-core": "file:../core",
-    "peggy": "^3.0.2"
+    "peggy": "^5.1.0"
   },
   "devDependencies": {
     "@types/jest": "^29.5.0",
