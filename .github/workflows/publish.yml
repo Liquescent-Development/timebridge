@@ -221,7 +221,7 @@ jobs:
 
       - name: Create GitHub Release
         if: github.event_name == 'push' && steps.check_release.outputs.exists == 'false'
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref }}
           name: Release ${{ github.ref_name }}
