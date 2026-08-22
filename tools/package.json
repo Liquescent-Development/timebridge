@@ -15,7 +15,7 @@
     "terser": "^5.24.0",
     "semver": "^7.5.4",
     "chokidar": "^3.5.3",
-    "express": "^4.18.2",
+    "express": "^4.22.2",
     "v8-profiler-next": "^1.10.0"
   },
   "devDependencies": {
